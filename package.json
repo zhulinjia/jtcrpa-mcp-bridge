@@ -1,0 +1,18 @@
+{
+  "name": "jtcrpa-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Windows Native Messaging bridge for the Jiutouchong browser extension",
+  "engines": { "node": ">=24.0.0" },
+  "bin": { "jtcrpa-mcp": "bin/cli.mjs" },
+  "files": ["bin", "dist", "windows", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.mjs",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "@modelcontextprotocol/server": "2.4.0", "zod": "4.4.3" },
+  "devDependencies": { "@modelcontextprotocol/client": "2.4.0", "@types/node": "^24.0.0", "typescript": "~5.9.3" }
+}
