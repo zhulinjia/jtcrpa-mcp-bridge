@@ -1,6 +1,8 @@
-# jtcrpa-mcp：九头虫 MCP 本地桥接
+# 九头虫 MCP 本机桥接器（jtcrpa-mcp）
 
-当前支持 Windows 本机连接、工作流编排、保存、执行及数据集读取。需要 Node.js 24+、Windows 自带 Windows PowerShell 5.1，以及浏览器中的九头虫扩展。
+本仓库维护 npm 包 `jtcrpa-mcp`，通过 Native Messaging 连接九头虫浏览器插件，并向 Codex 等 MCP 客户端提供工作流编排、执行和数据集读取能力。运行需要 Node.js 24+、Windows PowerShell 5.1 和已安装的九头虫插件。
+
+插件代码在 `agent-jtcrpa-com` 仓库。插件与桥接器独立打包和发布，通过本机通信协议配合。一起检出时，插件仓库位于 `../agent-jtcrpa-com`。
 
 ## 代码组织
 
@@ -46,16 +48,14 @@ Native 信封上限 512 KiB，业务结果预算 256 KiB，按 UTF-8 计量；�
 npm install --global jtcrpa-mcp
 ```
 
-当前包尚未发布到 npm，以上为发布后的正式安装命令。插件页面采用相同方案，不要求用户填写本地安装包路径。已有本地测试安装可继续使用；开发者在 `bridge/` 目录安装依赖并生成验收包：
+当前包尚未发布到 npm，以上为发布后的正式安装命令。开发者可从本仓库根目录生成并安装本地包。已有测试安装可继续使用。
 
 ```powershell
-npm install --registry=https://registry.npmjs.org
-npm run check
-npm test
 npm pack
+npm install --global .\jtcrpa-mcp-0.1.0.tgz
 ```
 
-`npm test` 会先编译，`npm pack` 也会重新编译后打包。开发时可在编译后使用 `npm link`；源码变更后先运行 `npm run build` 再调用命令，避免运行旧产物。
+首次从源码打包前，按下方开发步骤运行 `npm ci`。
 
 在插件设置菜单打开「MCP 连接」，复制本浏览器的注册命令并运行。例如：
 
@@ -105,16 +105,23 @@ MCP stdio 由官方 SDK 实现。浏览器原生宿主与 MCP 进程是两个 No
 
 消息上限为 512 KiB，工具输入按白名单校验。浏览器离线不阻塞 MCP 初始化和工具发现。断开不执行任何业务重放。协议版本或同时在线的实例 ID 冲突会明确报错。`instances` 只显示实例 ID 和进程存活状态，工具调用仍以实际通信结果为准。
 
-## 验收
+## 开发与发包
 
-`node tests/mcp-package/run.mjs`（仓库根）执行实际 npm 包验收：打包、检查运行文件、在项目内隔离 npm prefix 全局安装，通过全局命令和生成的 Codex 配置检查入口，注册两端宿主，使用版本递增的隔离包验证更新与重新注册，再经安装包回归 Chrome / Firefox 的编排、保存、执行和数据读取，最后卸载宿主及隔离全局包。该测试使用已有的最新 foundation E2E 构建；过期时先按下方命令更新构建。测试可能下载包中已声明的运行依赖，不发布 npm、不替换用户的日常全局安装，也不测试 Claude Code 或 DeepSeek Harness。报告与安装包保存在 `.output/npm-acceptance/run-*/`。
+在桥接器仓库根目录运行以下命令。
 
-仅验证包名、命令或打包入口等分发改动时，可加 `--package-only`，检查实际安装、配置、更新、注册与卸载；报告标记该范围，不执行浏览器业务回归。
+```powershell
+npm ci
+npm run check
+npm test
+npm pack
+```
 
-`node tests/mcp-foundation/run.mjs --with-sdk --with-codex --with-authoring`（仓库根）在隔离扩展构建中运行正式接线和正式原生宿主，验证两个 Chrome 配置和 Firefox 的独立实例、通信、离线隔离；使用已安装 Codex 的临时会话直接调用编排工具，验证页面、子帧、清洗预览、保存与编辑、重复请求和非法流程拒绝，以及重启后的持久化。加 `--with-model` 另让 Codex 模型实际读取规则、页面取证、编排并保存一次；默认不调用模型。`--reuse-build` 可复用通过时间检查的现有测试构建。
+`npm test` 和 `npm pack` 都会先编译。`npm pack` 生成 `jtcrpa-mcp-<版本>.tgz`。确认验收后，可以将同一份 `.tgz` 作为 `npm publish` 的输入。开发时可用 `npm link`，源码更新后运行 `npm run build` 刷新 CLI 加载的 `dist/`。
 
-测试构建预授予 nativeMessaging，临时 Codex 会话仅为隔离实例的 page_probe / workflow_save 预授予工具调用，避免无人交互的测试被客户端审批阻断。正式页面的可选权限和 Codex 工具审批仍需用户在客户端核对；测试不修改已有客户端配置。Claude Code 和 DeepSeek Harness 按用户要求暂缓测试。
+在插件仓库根目录用生成的 `.tgz` 验证真实安装。下例对应两个仓库并列检出且桥接器版本为 `0.1.0`。
 
-执行验收额外传 `--with-execution`，同时回归编排、保存并运行本地夹具，检查暂停恢复、结束、同页拒绝和 MCP 会话退出后仍继续执行。`--with-execution-model` 另让 Codex 模型执行指定夹具流程，并为该隔离实例的 workflow_run / run_control 预先设置测试授权；模型仅能使用明确授权的本地流程。报告位于 `.output/.mcp-foundation/report.json`、`execution-model-report.json`。
+```powershell
+node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.1.0.tgz --install-only
+```
 
-数据验收传 `--with-datasets`，同时回归编排和执行，再真实读取采集结果、测试 501 行分页与超大行处理。`--with-dataset-model` 另让 Codex 模型查询并分页读取指定数据集；这两个数据工具为只读，不需要额外的写工具测试授权。模型报告为 `.output/.mcp-foundation/dataset-model-report.json`。
+`--install-only` 检查包内容、全局命令、客户端配置及官方 SDK 的离线调用，可以在日常桥接运行时执行。去掉该参数后，还会测试宿主注册、升级和 Chrome / Firefox 联调，需要使用当前用户下没有同名宿主注册的 Windows 测试环境。插件仓库的 `docs/2026-11-06-mcp-package-acceptance.md` 记录完整入口和报告位置。
