@@ -1,0 +1,83 @@
+name: Publish to npm
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - id: version
+        name: Match the tag to the package version
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw -LiteralPath package.json | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -cne "v$version") { throw "Tag must match package version $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - run: npm.cmd ci
+      - run: npm.cmd run check
+      - run: npm.cmd test
+      - run: npm.cmd pack
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: npm-package
+          path: jtcrpa-mcp-${{ steps.version.outputs.version }}.tgz
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: npm-package
+          path: release
+      - name: Publish the verified archive and check its registry digest
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $registry = 'https://registry.npmjs.org'
+          $uri = "$registry/jtcrpa-mcp/$env:RELEASE_VERSION"
+          $archive = Join-Path $PWD "release/jtcrpa-mcp-$env:RELEASE_VERSION.tgz"
+          $expected = 'sha512-' + [Convert]::ToBase64String([Security.Cryptography.SHA512]::HashData([IO.File]::ReadAllBytes($archive)))
+          $response = Invoke-WebRequest -Uri $uri -SkipHttpErrorCheck
+          if ($response.StatusCode -eq 404) {
+            npm.cmd publish $archive --access=public --registry=$registry
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            for ($attempt = 0; $attempt -lt 10; $attempt++) {
+              $response = Invoke-WebRequest -Uri $uri -SkipHttpErrorCheck
+              if ($response.StatusCode -ne 404) { break }
+              Start-Sleep -Seconds 3
+            }
+          }
+          if ($response.StatusCode -ne 200) { throw "npm returned HTTP $($response.StatusCode) for $uri" }
+          $published = $response.Content | ConvertFrom-Json
+          if ($published.dist.integrity -cne $expected) { throw "Registry integrity differs from the built archive" }
+          Write-Output "Verified jtcrpa-mcp@$env:RELEASE_VERSION on npm"
