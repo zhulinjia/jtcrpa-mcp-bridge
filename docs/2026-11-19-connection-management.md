@@ -1,5 +1,7 @@
 # MCP 桥接器连接管理方案
 
+[English](#english)
+
 独立桥接器 0.4.1 使用三个命令管理连接。运行 `jtcrpa-mcp --version` 可核对当前终端调用的版本。
 
 ## 用户操作
@@ -38,3 +40,32 @@
 2. 对同一浏览器的两个不同扩展 ID 分别运行注册命令，列表中有两条记录，两者都能连接。对其中任一 ID 再次运行，记录数、连接编号和已选实例保持一致。
 3. 同一扩展的两个浏览器实例可以分别辨认。选定目标离线时显示离线，连接恢复后状态更新。
 4. 按列表序号删除选中的连接，其他记录继续使用。并发登记同一目标只生成一条记录。写入失败时保留一致的授权结果。
+
+## English
+
+Version 0.4.1 provides three commands for managing connections. Use `jtcrpa-mcp --version` to check which version the current terminal resolves.
+
+### Manage a connection
+
+| Action | Command | Result |
+| --- | --- | --- |
+| List | `jtcrpa-mcp list` | Shows the browser, full extension ID, selected instance and current status. Registrations remain visible while offline. |
+| Add | `jtcrpa-mcp add --chrome-id <extension-id>` | Registers that extension ID for Chrome. Repeating the command reuses the existing authorization. Use `--firefox-id` for Firefox. |
+| Remove | `jtcrpa-mcp remove` | Prompts for a registration and confirms the selection. It removes the browser authorization when the last registration for that extension ID is removed. |
+
+Install the npm package, then copy the registration command from the extension’s MCP page. The first registration installs the native host for the current Windows user. Further extension IDs are added to the browser’s manifest. Running `add` again also repairs a moved launcher or refreshes the registration where needed.
+
+Use `remove <connection-number>` for non-interactive removal. `list --json` returns registrations, candidate instances and instances whose caller identity is still unconfirmed. To select a target, use `add --chrome-id <extension-id> --instance <uuid-from-list>`, or the corresponding Firefox command. The first selection keeps the connection number. Repeating the same selection reuses it. Selecting an additional instance creates another number.
+
+### How a registration identifies a browser
+
+The extension ID authorizes the extension in its browser. A registration may initially have no selected instance. After the browser handshake, the list shows instance UUIDs and availability. Unconfirmed identities are marked `待确认`. To replace a selected target or extension ID, add the new registration, update the client and then remove the old one.
+
+`jtcrpa-mcp config --connection c1` embeds the registration’s binding UUID in the generated stdio arguments. Each tool call resolves the selected instance and checks the caller’s browser identity. An old client receives `CONNECTION_REMOVED` after its registration is removed, even if a new installation reuses its display number. Clients configured with `--instance <UUID>` address that instance directly.
+
+### Storage and verification
+
+- The bridge persists the registrations and associates the browser-supplied extension identity with the observed instance UUID during the native handshake.
+- Each browser receives the unique extension IDs referenced by its registrations. Chrome uses `allowed_origins` and Firefox uses `allowed_extensions`. [Chrome native hosts](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging#native-messaging-host) · [Firefox native manifests](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_manifests#native_messaging_manifests)
+- Removing a registration that affects a live session identifies the instance to disconnect first. Registration and manifest updates are serialized. Failed writes trigger restoration of the previous state. `uninstall` removes native host registrations for the current installation.
+- Acceptance covers persistent offline entries, independent extension IDs, selection of multiple profiles sharing an extension ID, reconnects, targeted removal, concurrent registration and write failures.

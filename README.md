@@ -1,128 +1,88 @@
-# 九头虫 MCP 本机桥接器（jtcrpa-mcp）
+# 九头虫 MCP 桥接器 · Jiutouchong MCP Bridge
 
-本仓库维护 npm 包 `jtcrpa-mcp`，通过 Native Messaging 连接九头虫浏览器插件，并向 Codex 等 MCP 客户端提供工作流编排、执行和数据集读取能力。运行需要 Node.js 20.19.0 或更高版本、Windows PowerShell 5.1 和已安装的九头虫插件。新安装建议选择仍受官方维护的 Node.js LTS。
+[简体中文](#简体中文) · [English](#english)
 
-插件代码在 `agent-jtcrpa-com` 仓库。插件与桥接器独立打包和发布，通过本机通信协议配合。一起检出时，插件仓库位于 `../agent-jtcrpa-com`。
+## 简体中文
 
-## 代码组织
+`jtcrpa-mcp` 让 MCP 客户端连接这台 Windows 电脑上的九头虫浏览器扩展。连接后，你可以让 AI 查看指定浏览器的标签页、创建和运行工作流、检查日志，或读取采集到的数据。
 
-- `src/mcp.ts`：静态导入 MCP 依赖，创建服务并依次装配各组工具。
-- `src/tools/forwarded.ts`：业务工具注册、扩展请求转发、错误判定与 MCP 返回格式转换，各自分为独立函数。
-- `src/tools/connection.ts`：连接状态与回声工具，保留各自的离线返回处理。
-- `src/tools/authoring.ts`：页面上下文、编排契约、探针与工作流查询 / 保存定义。
-- `src/tools/execution.ts`：启动、运行查询与运行控制定义。
-- `src/tools/datasets.ts`：数据集元数据查询与分页读取定义。
-- `src/tools/definition.ts`：转发工具的类型契约；只读及外部副作用属性由每个定义明确声明。
-- `src/connection-cli.ts` 提供连接列表和交互删除。`src/connections.ts` 保存稳定编号、目标和浏览器握手确认过的实例。`src/install.ts` 同步登记与宿主清单，`src/registration-lock.ts` 串行处理当前用户的变更。
-- `src/native-host-registry.ts`：Chrome / Firefox 原生宿主注册表路径及查询、注册、删除与尽力恢复操作；查询使用 `windows/read-registration.ps1` 返回 UTF-8 JSON，保留中文路径。
+### 安装并连接第一个浏览器
 
-CLI 在命令入口按需装配对应模块；MCP 模块内部使用静态导入。工具定义拆分不改变对外名称、描述、参数 Schema、属性及返回处理。
+1. 准备原生 Windows、Windows PowerShell 5.1、Node.js **20.19.0 或更高版本**，以及装有九头虫扩展的 Chrome 或 Firefox 配置。使用 Codex 的用户还需要能在终端运行 `codex`。在 PowerShell 中安装桥接器并检查版本。
 
-源码使用 TypeScript；`npm run build` 输出 `dist/` 中的 JavaScript，并将本地导入改为 `.js`。CLI 只加载 `dist/`；`npm pack` / 发布前通过 prepack 自动编译，安装包包含 `bin/`、`dist/` 和 `windows/`，使用者不需要 TypeScript 编译器。不要将直接运行源码或 npm link 的结果当作实际安装包的验收结果。
+   ```powershell
+   npm.cmd install --global jtcrpa-mcp
+   jtcrpa-mcp.cmd --version
+   ```
 
-工具描述统一使用中文，工具名、参数名和状态标识保留协议原名。
+2. 在要连接的浏览器中打开九头虫的**设置 → MCP 连接**。复制**注册当前浏览器**下的整条命令，在 PowerShell 中运行。页面会填好当前扩展 ID，Chrome 使用 `add --chrome-id`，Firefox 使用 `add --firefox-id`。首次运行会为当前 Windows 用户注册本机宿主。
+3. 在同一页面打开**开启 MCP 连接**，按浏览器提示允许本机通信。状态变为**浏览器与本机程序已连接**后，在**接入外部 AI**中选择客户端。
 
-MCP 编排完整复用插件原 `system_prompt.md`，只补取 Schema 时用 `includeGuide: false`。通过 MCP 编排或修改保存成功后，AI 必须说明保存结果、询问是否现在执行，并等待本次保存后的用户确认；成功返回中的 `nextAction.type=confirm_execution` 表达这个交接。用户直接要求运行已有流程时按该指令调用，无须重新编排。此交接只适用于 MCP，不改变共享提示词或插件内置 AI 流程，也不是后台认证用户回复的授权凭据。
+   | 客户端 | 在哪里使用页面生成的命令或配置 |
+   | --- | --- |
+   | Codex | 在 PowerShell 中执行页面给出的 `codex mcp add` 完整命令。它会保存名为 `jtcrpa` 的服务。重新连接 MCP 或重启 Codex。 |
+   | Claude Code | 在 PowerShell 中执行页面给出的 `config` 命令，将输出的 `mcpServers.jtcrpa` 合并到项目的 `.mcp.json`。重启客户端，在 `/mcp` 查看。 |
+   | DeepSeek Harness | 在 PowerShell 中执行页面给出的 `config` 命令，把输出的插件条目加入 Harness 的插件列表，然后重启客户端。 |
 
-## 工具能力
+4. 在客户端发送 **“检查九头虫 MCP 连接，并列出当前浏览器标签页。”** 对照浏览器中打开的标签页即可确认连到了正确的配置。Codex 已在 Chrome 和 Firefox 上完成端到端验收。Claude Code 和 DeepSeek Harness 提供配置生成，尚未完成同等的端到端验收。
 
-编排工具：`browser_context` 选择明确标签页；`workflow_contract` 读取现有编译说明和按需节点/探针 Schema；`page_probe` 提供 snapshot、queryFrames、probeElement、probeExtract、probeClick、probeScroll；`workflow_list` / `workflow_get` 查询；`workflow_save` 复用原提交校验并保存。暂未适配网络、文件、飞书等探针，不能把相关前置能力视为已验证。当前仅通过 Codex 验收，Claude Code 与 DeepSeek Harness 保留配置生成支持。
+安装、注册和客户端接入通常只做一次。保持该浏览器配置的 MCP 开关开启，浏览器会按需启动本机宿主。日常使用时打开目标浏览器即可。
 
-执行工具：`workflow_run` 按明确 workflowId / tabId 启动用户工作流，返回 runId；`run_get` 按 runId 查询真实状态和日志摘要，省略 runId 时列最近记录，可按 workflowId 收窄；`run_control` 暂停、恢复或结束。运行与控制同样需要 UUID requestId，复用下述结果凭据。运行授权与编排保存分开，先确认用户要运行再调用；返回 runId 表示已建档，ok 不代表已完成。暂停时在途页面动作可能完成；结束不撤销已经发生的副作用，终态保持 FAILED / run:aborted。
+### 使用工作流和数据集
 
-`run_get` 最多列最近 20 次运行、最近 50 条日志（默认 10 条；logLimit=0 跳过日志加载），只返回摘要，不返回变量、工作流整树、日志参数或 result 原文。状态和日志是实时数据，可能来自不同读取时点；需要完整错误细节时到插件日志页查看。MCP 断开不结束运行，未知启动结果先查请求编号和最近运行，不自动重新启动。
+| 用途 | MCP 工具 | 示例 |
+| --- | --- | --- |
+| 确认连接、读取页面 | `connection_status`、`connection_ping`、`browser_context`、`page_probe` | “列出当前标签页，查看所选商品列表页能提取哪些字段。” |
+| 查找或编排工作流 | `workflow_list`、`workflow_get`、`workflow_contract`、`workflow_save` | “把当前页面的商品名称和价格采集规则保存为工作流。” |
+| 执行并检查结果 | `workflow_run`、`run_get`、`run_control` | “在当前列表页运行刚才的工作流，再告诉我状态和最近日志。” |
+| 读取采集数据 | `dataset_list`、`dataset_read` | “找到商品数据集，读取前 20 行，只返回商品名称和价格。” |
 
-数据工具：`dataset_list` 按关键词分页查询元数据（默认每页 20 项、最多 50 项）；`dataset_read` 按真实 datasetId 或 datasetName 精确读取，两个标识必须且只能提供一个。页码从 1 起，默认每页 50 行、最多 200 行，可通过 fields 选择字段。沿用正式列和字符串投影，不返回内部 id / _hash；空页、未找到与存储异常分别返回。结果标记 consistency:live，不保证并发采集时的冻结快照。
+保存新工作流或修改已有工作流后，客户端应等你确认再执行。启动返回 `runId`，用 `run_get` 查询完成状态。写操作超时后，先用原 UUID 请求编号查询 `connection_status`，再核对最近运行。暂停可能仍有在途动作，结束运行不会撤销已执行的操作。
 
-用户已明确：使用自己的 AI 读取自己的数据，不检查会员、导出额度等权限。数据读取没有套餐门槛；原有导出下载规则保持现有行为。单次数据响应限制 256 KiB，超限明确报错，按提示减小 pageSize 或 fields，不截断记录。元数据列表不包含样例行或上传文件的原始表头内容。
+`dataset_read` 按 `datasetId` 或 `datasetName` 精确读取，两者任选其一。页码从 1 开始，默认每页 50 行、最多 200 行，`fields` 可指定字段。采集仍在进行时，翻页读到的是当时的数据。单次结果上限为 256 KiB，超限时请减小页大小或减少字段。
 
-`connection_status` 可带 `requestId` 查询写请求结果。保存、点击/滚动探针需 UUID 格式的 requestId；同 ID 同参数返回已知结果，参数不同拒绝，未完成凭据返回 `OUTCOME_UNKNOWN`。超时或取消不等于未执行，不自动换 ID 重试。凭据位于扩展的 `mcp-write-requests`，保留至显式归档，不自动过期；最多 1024 条、2 MiB（为单条结果预留 256 KiB），满时拒绝新写入。本期未提供归档界面，不应通过清空凭据规避未知状态。跨崩溃不保证业务恰好执行一次。编辑遵循原 upsert 语义，检查返回的 updated 与 workflowId。
+### 管理多个浏览器配置
 
-Native 信封上限 512 KiB，业务结果预算 256 KiB，按 UTF-8 计量；超限明确报错，不静默裁切。探针最长可等待 30 秒，原生宿主等待 45 秒，IPC 等待 50 秒。客户端更早超时后，可用原 requestId 查询保存结果。
-
-## 本地安装
-
-在 Windows PowerShell 中从 npm 全局安装桥接器。
-
-```powershell
-npm.cmd install --global jtcrpa-mcp
-```
-
-本地测试时，也可以安装从源码生成的压缩包。
-
-```powershell
-npm.cmd pack
-npm.cmd install --global .\jtcrpa-mcp-0.4.1.tgz
-```
-
-首次从源码打包前，按下方开发步骤运行 `npm ci`。
-
-在插件设置菜单打开「MCP 连接」，复制本浏览器的注册命令并运行。例如：
-
-```powershell
-jtcrpa-mcp.cmd add --chrome-id <真实Chrome扩展ID>
-jtcrpa-mcp.cmd add --firefox-id 379522770@qq.com
-```
-
-首次添加会为当前 Windows 用户注册本机宿主。同一浏览器的多个扩展 ID 可以分别添加，重复执行同一条命令会复用已有授权。已有连接可以继续使用。请从稳定的安装目录运行命令。移动包或更换 Node 路径后，关闭 MCP 连接，重新执行对应的 `jtcrpa-mcp add` 命令以更新启动器。
-
-开启扩展的 MCP 连接后，可以在 PowerShell 管理登记。浏览器关闭后仍能查到记录。
+直接使用扩展页面生成的接入命令时，客户端绑定该浏览器配置的实例 UUID。需要同时接入多个配置时，为每个实例设置不同的 MCP 服务名。要通过登记编号管理连接，可在 PowerShell 运行以下命令。
 
 ```powershell
 jtcrpa-mcp.cmd list
-jtcrpa-mcp.cmd add --chrome-id <扩展ID> --instance <列表中的UUID>
-jtcrpa-mcp.cmd remove
+jtcrpa-mcp.cmd list --json
 ```
 
-`list` 显示完整扩展 ID、已确认的浏览器实例 UUID 和在线状态。使用 `add --instance` 为待选登记指定目标，首次选择沿用原编号。对同一目标重复添加会复用该编号，同一扩展下的另一个实例会获得独立编号。Firefox 使用 `--firefox-id`。运行 `remove` 后按序号选择并确认。
-
-用列表编号为客户端生成配置。例如，以下命令生成绑定当前登记 `c1` 的 Codex 配置。客户端使用生成的绑定 UUID。删除登记后旧配置失效，重新安装时可以重新使用显示编号。
+如果列表显示「待选择实例」，确认目标浏览器已开启 MCP，然后执行列表给出的 `add ... --instance ...` 命令。相同扩展 ID 的多个浏览器配置可以分别选择。选定后，用实际编号替换下面示例中的 `c1`。
 
 ```powershell
 jtcrpa-mcp.cmd config --connection c1 --client codex
 ```
 
-从旧测试包升级时，原先手填 `mcp --connection c1` 的客户端需要重新生成一次配置。
+可选客户端为 `codex`、`claude`、`deepseek`，省略 `--client` 会输出三种配置。生成的启动参数包含登记的绑定 UUID。更换已选实例或扩展时，先添加新连接、更新客户端配置，再运行 `jtcrpa-mcp.cmd remove` 选择旧登记并确认。脚本可用 `jtcrpa-mcp.cmd remove c1` 直接删除指定登记。删除后，即使显示编号被复用，旧配置也会返回 `CONNECTION_REMOVED`。
 
-脚本可用 `list --json` 读取登记，用 `remove c1` 删除指定记录。需要换扩展或换已选实例时，先添加新连接，将客户端指向新编号，再删除旧登记。也可用扩展页面的命令直接连接指定的浏览器实例。
+### 排查连接问题
 
-```powershell
-cmd.exe /d /c codex mcp add jtcrpa -- cmd.exe /d /c jtcrpa-mcp mcp --instance <页面显示的实例ID>
-```
+| 现象 | 处理 |
+| --- | --- |
+| PowerShell 提示禁止运行脚本，或找不到命令 | 使用上面的 `npm.cmd` 和 `jtcrpa-mcp.cmd`。用 `npm.cmd prefix --global` 查看 Windows 全局命令目录，并确认它在当前终端的 `PATH` 中。 |
+| npm 镜像提示找不到刚发布的包 | 直接从官方源安装，运行 `npm.cmd install --global jtcrpa-mcp --registry=https://registry.npmjs.org`。 |
+| `Access to the specified native messaging host is forbidden` | 从当前扩展的 MCP 页面重新复制注册命令，对照 `list` 的完整扩展 ID，运行命令后重新开启 MCP。开发版扩展换 ID 后也要登记新 ID。 |
+| 「本机通信接口尚未就绪」或提示需要权限 | 在浏览器扩展管理页重新加载九头虫，返回 MCP 页面开启连接，按提示允许本机通信。 |
+| `BROWSER_OFFLINE` 或标签页属于另一个浏览器 | 打开目标浏览器配置并开启 MCP，核对页面的实例 UUID 与客户端配置。复制浏览器配置造成实例冲突时，使用扩展页面的「生成新实例 ID」并更新该客户端配置。 |
+| `CONNECTION_INSTANCE_NOT_SELECTED` 或 `CONNECTION_REMOVED` | 前者按 `list` 的提示选择实例。后者从现有登记重新生成客户端配置。 |
 
-需要终端已能运行 `codex` 和 npm 全局命令 `jtcrpa-mcp`；命令直接保存 Codex 配置，无需手动编辑 TOML。成功后重新连接 MCP 或重启 Codex，在聊天中发送「检查九头虫 MCP 连接，并列出当前浏览器标签页。」确认可用。该命令固定服务名为 `jtcrpa`，配置多个实例时应改用不同服务名。
+### 升级和卸载
 
-其它客户端或需要自行管理配置时，仍可生成配置：
+在原位置升级时，关闭 MCP 连接，运行 `npm.cmd install --global jtcrpa-mcp@latest`，再开启连接。移动 npm 全局目录或 Node.js 后，重跑当前扩展的注册命令。使用绝对路径的客户端配置也要重新生成。
 
-```powershell
-jtcrpa-mcp.cmd config --instance <页面显示的实例ID>
-```
-
-命令返回 Codex 的 TOML、Claude Code 的 MCP JSON，以及 DeepSeek Harness 的 MCP 插件配置。配置使用当前 Node 和包入口的绝对路径；DeepSeek 部分加到其插件列表中。每个浏览器配置使用独立实例 ID。多个实例需要在客户端使用不同的 MCP 服务名；浏览器关闭时返回离线，连接不会自动切换到其它实例。复制浏览器配置造成实例冲突时，可在插件页显式生成新实例 ID，再更新客户端配置。
-
-## 卸载
-
-关闭所有浏览器配置中的 MCP 开关，再运行：
+卸载前先关闭所有浏览器配置的 MCP 开关，再依次运行以下命令。第一条清理本安装的宿主登记和连接，第二条移除 npm 全局包。
 
 ```powershell
 jtcrpa-mcp.cmd uninstall
+npm.cmd uninstall --global jtcrpa-mcp
 ```
 
-只清理指向本安装目录的注册，保留其它原生宿主。随后可运行 `npm uninstall --global jtcrpa-mcp` 移除全局包。开发用 npm link 按其安装方式移除。原地更新包后，新进程会加载新版。安装目录默认 `%LOCALAPPDATA%\Jtcrpa\McpBridge`，`JTCRPA_BRIDGE_HOME` 仅供隔离验收指定独立目录。
+### 开发和验证
 
-若开发命令提示找不到 `dist/*.js`，先在源码目录运行 `npm run build`。若全局包提示不支持在 node_modules 中移除类型，说明仍在使用直接加载 `.ts` 的旧安装包，应重新打包并安装含 `dist/` 的版本。
-
-注册查询和启动器均支持 UTF-8 中文路径。移动全局目录或更换 Node 路径后，使用绝对路径接入的 AI 客户端也需更新其配置。
-
-## 通信边界
-
-MCP stdio 由官方 SDK 实现。浏览器原生宿主与 MCP 进程是两个 Node 进程；前者通过随包的 Windows PowerShell 脚本创建管道。管道显式仅授权当前用户并拒绝 Network SID，发现目录也限制当前用户访问；每次宿主会话另有随机认证令牌。令牌不会返回给 MCP 工具。此信任范围包含当前系统用户的本地进程。
-
-消息上限为 512 KiB，工具输入按白名单校验。浏览器离线不阻塞 MCP 初始化和工具发现。断开不执行任何业务重放。协议版本或同时在线的实例 ID 冲突会明确报错。`list` 通过本机管道确认浏览器是否在线，并保留已登记的离线实例。
-
-## 开发与发包
-
-在桥接器仓库根目录运行以下命令。
+在独立桥接器仓库的根目录运行以下命令。`npm test` 和 `npm pack` 都会编译 TypeScript，用户安装的是编译后的 JavaScript。与扩展的端到端验收方法见下方的「[维护者参考](#维护者参考)」。
 
 ```powershell
 npm.cmd ci
@@ -131,13 +91,117 @@ npm.cmd test
 npm.cmd pack
 ```
 
-`npm test` 和 `npm pack` 都会先编译。`npm pack` 生成 `jtcrpa-mcp-<版本>.tgz`。确认验收后，可以将同一份 `.tgz` 作为 `npm publish` 的输入。开发时可用 `npm link`，源码更新后运行 `npm run build` 刷新 CLI 加载的 `dist/`。
+## English
 
-在插件仓库根目录用生成的 `.tgz` 验证真实安装。下例对应两个仓库并列检出且桥接器版本为 `0.4.1`。
+`jtcrpa-mcp` connects an MCP client to the Jiutouchong browser extension on your Windows computer. Use it to inspect tabs in a chosen browser profile, create and run workflows, check run logs, or read collected data.
+
+### Connect your first browser
+
+1. Use native Windows with Windows PowerShell 5.1, **Node.js 20.19.0 or later**, and the Jiutouchong extension installed in a Chrome or Firefox profile. For Codex, the `codex` command must also be available in your terminal. Install the bridge and check its version in PowerShell.
+
+   ```powershell
+   npm.cmd install --global jtcrpa-mcp
+   jtcrpa-mcp.cmd --version
+   ```
+
+2. In the browser profile you want to use, open the extension’s **Settings → MCP connection**. Copy the entire command under **Register this browser** and run it in PowerShell. The extension fills in its own ID. Chrome uses `add --chrome-id` and Firefox uses `add --firefox-id`. The first registration installs the native host for the current Windows user.
+3. Turn on **Enable MCP connection** on that page and grant native messaging permission when prompted. Once the page shows **Browser connected to the local program**, choose your client under **Connect an AI app**.
+
+   | Client | How to use the command or configuration from the extension |
+   | --- | --- |
+   | Codex | Run the full `codex mcp add` command in PowerShell. It saves a service named `jtcrpa`. Reconnect the MCP client or restart Codex. |
+   | Claude Code | Run the generated `config` command in PowerShell. Merge the resulting `mcpServers.jtcrpa` entry into the project’s `.mcp.json`, restart Claude Code and check `/mcp`. |
+   | DeepSeek Harness | Run the generated `config` command in PowerShell, add the resulting plugin entry to the Harness plugin list and restart the client. |
+
+4. Ask your client **“Check the Jiutouchong MCP connection and list the tabs in the connected browser.”** Match the returned tabs to the ones open in your target profile. Codex has been tested end to end with both Chrome and Firefox. Configuration generation is available for Claude Code and DeepSeek Harness. An equivalent end-to-end test for these two clients is pending.
+
+Setup is normally a one-time operation. Leave MCP enabled in the target profile. The browser starts the native host on demand when you open that profile.
+
+### Work with workflows and datasets
+
+| Task | MCP tools | Example request |
+| --- | --- | --- |
+| Check the connection and inspect a page | `connection_status`, `connection_ping`, `browser_context`, `page_probe` | “List the tabs and check which fields can be extracted from the selected product listing.” |
+| Find or create a workflow | `workflow_list`, `workflow_get`, `workflow_contract`, `workflow_save` | “Save a workflow that collects product names and prices from this page.” |
+| Run a workflow and check the result | `workflow_run`, `run_get`, `run_control` | “Run that saved workflow on this listing and show its status and recent logs.” |
+| Read collected data | `dataset_list`, `dataset_read` | “Find the product dataset and show the first 20 rows with just names and prices.” |
+
+After saving a new or edited workflow, the client should wait for your confirmation before running it. Starting a workflow returns a `runId`. Use `run_get` to check whether it finished. If a write times out, query `connection_status` with the original request UUID and check recent runs before retrying. An action already in progress can finish after a pause. Stopping a run does not undo actions it has already taken.
+
+For `dataset_read`, supply exactly one of `datasetId` and `datasetName`. Pages start at 1, with 50 rows by default and a maximum of 200. Use `fields` to select columns. Pages reflect live data if collection is still running. If a result exceeds 256 KiB, request fewer rows or columns.
+
+### Manage multiple browser profiles
+
+The setup command from the extension binds the client to the instance UUID of that browser profile. Give each instance its own MCP service name when connecting several profiles. To manage connections by their registration number, run the following in PowerShell.
+
+```powershell
+jtcrpa-mcp.cmd list
+jtcrpa-mcp.cmd list --json
+```
+
+If the list shows `待选择实例` (select an instance), enable MCP in the intended profile and run the `add ... --instance ...` command shown in the list. Profiles with the same extension ID can be selected separately. After selecting a target, substitute its connection number for `c1` in this example.
+
+```powershell
+jtcrpa-mcp.cmd config --connection c1 --client codex
+```
+
+The supported client identifiers are `codex`, `claude` and `deepseek`. Omit `--client` to print all three configurations. The generated startup arguments contain the registration’s binding UUID. To switch to a different extension ID or selected instance, add the new connection, update the client, then run `jtcrpa-mcp.cmd remove` to select and confirm the old registration. In scripts, `jtcrpa-mcp.cmd remove c1` removes the specified entry directly. The old client configuration returns `CONNECTION_REMOVED` even if its display number is later reused.
+
+### Troubleshooting
+
+| Symptom | What to do |
+| --- | --- |
+| PowerShell reports that scripts are disabled, or cannot find the command | Use `npm.cmd` and `jtcrpa-mcp.cmd` as shown above. Check the Windows global command directory with `npm.cmd prefix --global` and ensure it is on the current terminal’s `PATH`. |
+| An npm mirror cannot find a newly published version | Install from the public registry with `npm.cmd install --global jtcrpa-mcp --registry=https://registry.npmjs.org`. |
+| `Access to the specified native messaging host is forbidden` | Copy the registration command from the current extension, check its complete ID against `list`, run the command and turn MCP on again. Register the new ID if a development build’s extension ID has changed. |
+| The native messaging interface is unavailable, or the browser requests permission | Reload Jiutouchong from the browser’s extensions page, enable the connection again and allow native messaging when prompted. |
+| `BROWSER_OFFLINE` or tabs from the wrong browser | Open the target profile, enable MCP and compare its instance UUID with the client configuration. If a copied profile produces an instance conflict, use the extension’s option to generate a new instance ID and update that client. |
+| `CONNECTION_INSTANCE_NOT_SELECTED` or `CONNECTION_REMOVED` | For the first error, select a target using the instruction from `list`. For the second, generate a fresh client configuration from an existing registration. |
+
+### Upgrade or uninstall
+
+For an in-place upgrade, turn MCP off, run `npm.cmd install --global jtcrpa-mcp@latest` and reconnect. If Node.js or the npm global directory moves, rerun the registration command from the extension. Regenerate client configurations that refer to the previous absolute paths.
+
+To uninstall, first disable MCP in all connected browser profiles. The first command below removes this installation’s native host registrations and connections. The second removes the global npm package.
+
+```powershell
+jtcrpa-mcp.cmd uninstall
+npm.cmd uninstall --global jtcrpa-mcp
+```
+
+### Development and verification
+
+Run these commands in the root of the standalone bridge repository. Both `npm test` and `npm pack` compile TypeScript. The npm package ships the compiled JavaScript. For extension integration tests, see the [maintainer reference](#maintainer-reference).
+
+```powershell
+npm.cmd ci
+npm.cmd run check
+npm.cmd test
+npm.cmd pack
+```
+
+## 维护者参考
+
+- `bin/cli.mjs` 按命令加载 `dist/`。`src/mcp.ts` 装配 `src/tools/` 的连接、编排、执行和数据工具，后者由 `forwarded.ts` 转发到扩展。工具说明为中文，工具名、参数名和状态标识在两种语言中一致。
+- 浏览器通过 Native Messaging 启动宿主。MCP 客户端启动单独的 stdio 进程，两者通过当前 Windows 用户的命名管道和每次会话的令牌通信。默认登记目录是 `%LOCALAPPDATA%\Jtcrpa\McpBridge`。`src/install.ts`、`src/connections.ts` 和 `src/registration-lock.ts` 负责登记、绑定和并发更新。浏览器关闭后仍可发现 MCP 工具，并可查询离线状态。
+- 原生消息帧最大为 512 KiB，单次业务结果最大为 256 KiB。`page_probe` 支持页面快照、子帧查询、元素/提取探测、点击和滚动。`run_get` 最多列 20 次运行，每次最多读取 50 条日志，默认 10 条。`dataset_list` 默认每页 20 项，最多 50 项。
+- 写请求用 UUID 标识。遇到 `OUTCOME_UNKNOWN` 时先查询原请求。扩展最多保留 1,024 条写请求凭据，共 2 MiB。`MCP` 连接断开后，正在运行的工作流由扩展继续管理。
+- 扩展仓库与此仓库并列检出时，可在扩展仓库根目录运行下面的命令，对实际分发包进行隔离安装和真实浏览器验收。本例使用 0.4.1。正式发包使用已验收的同一份 `.tgz`。
 
 ```powershell
 node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.4.1.tgz --install-only
 node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.4.1.tgz --isolated-host
 ```
 
-`--install-only` 验证受限 PowerShell 的全局安装、连接管理和官方 SDK 离线调用。`--isolated-host` 还会用独立的 Windows 注册表宿主名、临时浏览器配置和同一份安装包验证升级、卸载、Chrome / Firefox 在线工具与数据读取。专用 Windows 测试帐户可省略参数，验证正式宿主名。完整入口和报告位置见插件仓库的 `docs/2026-11-06-mcp-package-acceptance.md`。
+## Maintainer reference
+
+- `bin/cli.mjs` loads commands from `dist/`. `src/mcp.ts` assembles the connection, authoring, execution and dataset tools in `src/tools/`. `forwarded.ts` relays tool calls to the extension. Tool descriptions are in Chinese. Tool names, argument names and status identifiers are shared by both guides.
+- The browser starts the native host through Native Messaging. The MCP client starts a separate stdio process. They communicate through a Windows named pipe restricted to the current user, with a token for each session. Registrations default to `%LOCALAPPDATA%\Jtcrpa\McpBridge`. `src/install.ts`, `src/connections.ts` and `src/registration-lock.ts` manage registrations, bindings and concurrent updates. Tool discovery and offline status queries work while the browser is closed.
+- Native frames are limited to 512 KiB, and individual tool results to 256 KiB. `page_probe` supports snapshots, frame queries, element and extraction probes, clicks and scrolling. `run_get` lists at most 20 runs and reads up to 50 log entries, with 10 entries by default. `dataset_list` defaults to 20 items per page and allows up to 50.
+- Writes carry a request UUID. Query the original request after `OUTCOME_UNKNOWN`. The extension keeps up to 1,024 write-request records totalling 2 MiB. The extension continues to manage active workflows if the MCP connection drops.
+- With the extension and bridge repositories checked out side by side, run the following from the extension repository to test the actual archive in an isolated installation and in real browsers. The example uses version 0.4.1. Publish the same `.tgz` that passed acceptance.
+
+```powershell
+node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.4.1.tgz --install-only
+node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.4.1.tgz --isolated-host
+```

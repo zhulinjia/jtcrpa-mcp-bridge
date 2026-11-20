@@ -2,7 +2,12 @@
   "name": "jtcrpa-mcp",
   "version": "0.4.1",
   "type": "module",
-  "description": "Windows Native Messaging bridge for the Jiutouchong browser extension",
+  "description": "Windows Native Messaging bridge for Jiutouchong / 九头虫浏览器扩展的 Windows MCP 桥接器",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhulinjia/jtcrpa-mcp-bridge.git"
+  },
+  "publishConfig": { "registry": "https://registry.npmjs.org", "access": "public" },
   "engines": { "node": ">=20.19.0" },
   "os": ["win32"],
   "bin": { "jtcrpa-mcp": "bin/cli.mjs" },
