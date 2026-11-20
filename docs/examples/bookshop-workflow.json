@@ -1,0 +1,44 @@
+{
+  "name": "Bookshop demo",
+  "guide": "在书店练习场打开要采集的列表页，运行后到 bookshop_demo 查看书名和价格。\n\nOpen the bookshop listing you want to collect. Run the workflow and read the titles and prices from bookshop_demo.",
+  "steps": [
+    {
+      "type": "extract",
+      "source": "dom",
+      "description": "采集本页书名和价格 / Collect titles and prices on this page",
+      "alias": "books",
+      "dataset_name": "bookshop_demo",
+      "selectors": {
+        "type": "container",
+        "paths": [
+          { "primary": "#books article.book-card", "secondary": "//div[@id='books']/article" }
+        ],
+        "fingerprint": { "tagName": "ARTICLE", "ancestorChain": ["DIV", "SECTION", "DIV"] }
+      },
+      "steps": [
+        {
+          "description": "书名 / Book title",
+          "field_name": "title",
+          "attribute_name": "text",
+          "selectors": {
+            "paths": [
+              { "primary": ".book-title", "secondary": ".//h3/a" }
+            ],
+            "fingerprint": { "tagName": "A", "ancestorChain": ["H3", "DIV", "ARTICLE"] }
+          }
+        },
+        {
+          "description": "价格 / Price",
+          "field_name": "price",
+          "attribute_name": "text",
+          "selectors": {
+            "paths": [
+              { "primary": ".book-price", "secondary": ".//span[@class='book-price']" }
+            ],
+            "fingerprint": { "tagName": "SPAN", "ancestorChain": ["DIV", "DIV", "ARTICLE"] }
+          }
+        }
+      ]
+    }
+  ]
+}

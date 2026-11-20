@@ -4,32 +4,58 @@
 
 ## 简体中文
 
-[首次安装与连接](../README.md#简体中文)
+[从安装到读出第一张表](../README.md#首次连接) · [已有连接，直接跟做书店练习](../README.md#第一次用-mcp-采集书名和价格)
 
 ### 客户端配置
 
-浏览器连通后，在扩展的 **接入外部 AI** 中选择客户端。使用 Codex 时，应能在终端运行 `codex`。
+先在扩展的 **MCP 连接** 页面等到 **浏览器与本机程序已连接**。**注册当前浏览器** 的命令按浏览器使用 `add --chrome-id` 或 `add --firefox-id`，允许这个扩展和桥接器通信。**接入外部 AI** 生成的命令还包含这份浏览器配置的实例 ID。直接复制页面上的命令，两个 ID 都会自动带入各自的位置。
 
-| 客户端 | 在哪里使用页面生成的命令或配置 |
-| --- | --- |
-| Codex | 在 PowerShell 中执行页面给出的 `codex mcp add` 完整命令。它会保存名为 `jtcrpa` 的服务。重新连接 MCP 或重启 Codex。 |
-| Claude Code | 在 PowerShell 中执行页面给出的 `config` 命令，将输出的 `mcpServers.jtcrpa` 合并到项目的 `.mcp.json`。重启客户端，在 `/mcp` 查看。 |
-| DeepSeek Harness | 在 PowerShell 中执行页面给出的 `config` 命令，把输出的插件条目加入 Harness 的插件列表，然后重启客户端。 |
+| 你用哪个客户端 | 第一次接入怎么做 | 怎么知道已接通 |
+| --- | --- | --- |
+| Codex | 在扩展选 **Codex → 复制 Codex 接入命令**，整行粘贴到 PowerShell 执行。它用 `codex mcp add jtcrpa` 登记当前浏览器。在 PowerShell 运行 `codex mcp list`，然后打开新会话。 | 终端列表有 `jtcrpa`，在聊天中发送书店练习的第一条消息还能读到正确的书名和价格。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
+| Claude Code | 在扩展选 **Claude Code**，在 PowerShell 执行复制的配置生成命令。在项目根目录新建 `.mcp.json` 时可粘贴完整输出。已有文件则把输出中的 `jtcrpa` 条目加到现有 `mcpServers` 对象。 | 在这个项目里重新打开 Claude Code，按提示允许该项目服务，输入 `/mcp` 查看 `jtcrpa`，然后发送同一条书店测试消息。[Claude Code MCP 文档](https://code.claude.com/docs/en/mcp) |
+| DeepSeek Harness | 在扩展选 **DeepSeek Harness**，在 PowerShell 运行复制的命令。在 Harness Web 或 Desktop 的设置里添加 MCP 服务，名称填 `jtcrpa`，传输选 `stdio`，命令与参数逐项复制生成结果里 `config` 的 `command` 和 `args`。使用插件配置文件时，可直接把生成的 `mcp-jtcrpa` 条目加入插件列表。 | 用该配置重新启动 Harness，在对话里让它用 `mcp__jtcrpa__connection_ping` 原样返回 `bookshop`。[Harness 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [插件配置示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
 
-Codex 已在 Chrome 和 Firefox 上使用支持 MCP 的扩展版本完成端到端验收。Claude Code 和 DeepSeek Harness 提供配置生成，尚未完成同等的端到端验收。
+Codex 已通过 Chrome 和 Firefox 联调。Claude Code 和 DeepSeek Harness 已验证桥接器能生成上述配置，客户端内的完整采集尚待验证。
+
+### 书店示例的工具调用
+
+下面对应首页三条聊天消息。使用者在聊天框说需求，AI 客户端向 `jtcrpa` 调用工具。想核对客户端做到了哪一步，可以对照表里的返回值。
+
+| 操作 | 客户端传给 MCP 的工具和参数 | 用什么判断成功 |
+| --- | --- | --- |
+| 1. 确认连接和页面 | `connection_status` 传 `{}`。`connection_ping` 传 `{"text":"bookshop"}`。`browser_context` 传 `{}`。 | `connected: true`，回声里的 `text` 为 `bookshop`。在 `tabs` 中找到书店网址，取这条记录的 `tabId`。 |
+| 2. 看页面，试采一行 | 调用 `workflow_contract`，传 `{"nodeTools":["emitExtractNode"],"probeTools":["snapshot","probeExtract"]}`。用上一步的 `tabId` 调用 `page_probe`，先用 `tool: "snapshot"`，然后用 `tool: "probeExtract"`，`params` 包含书籍卡片的 `selectors` 和两列的 `steps`。 | 快照包含书名。首页的 `totalMatched` 为 4，`sample` 只预览前 2 行的 `title` 和 `price`。 |
+| 3. 保存并核对规则 | `workflow_save` 传 `tabId`、新生成的 UUID `requestId` 和完整的 `workflow` 对象。可直接使用下方的书店规则。接着将返回的 `workflowId` 传给 `workflow_get`。 | 首次保存返回 `ok: true`、`updated: false` 和 `workflowId`。核对规则指向 `bookshop_demo`。`nextAction.type` 为 `confirm_execution`，此处等待用户单独确认。 |
+| 4. 启动并等到结束 | 用户确认后，`workflow_run` 传已保存的 `workflowId`、目标 `tabId` 和这次运行的新 UUID `requestId`。把返回的 `runId` 传给 `run_get`，可加 `logLimit: 3` 查看最近日志。 | `runId` 用于追踪这一次运行。等到 `run.status` 为 `SUCCESS`，本例的 `run.savedRows` 为 4。遇到 `FAILED` 可查看同一响应里的 `logs`。 |
+| 5. 读取真正落库的行 | `dataset_list` 传 `{"query":"bookshop_demo"}`。核对 `datasets` 里的 `datasetName`、`fields`、`rowsCount`。再用 `dataset_read` 传精确的 `datasetName` 或用查到的 `id` 作 `datasetId`。 | 首次运行且数据集原来为空时，`total` 为 4，`rows` 中有《山海之间》和 ¥32.00。 |
+
+示例文件是 `workflow_save` 的 **workflow 参数**。它包含可通过校验的完整步骤。要重现试采，取第一个节点的 `selectors` 和 `steps` 作为 `probeExtract` 的 `params`。标签页编号由 `browser_context` 提供，写请求的 UUID 由客户端生成。[查看完整书店规则 JSON](examples/bookshop-workflow.json)
+
+想核对自己客户端发出的请求时，可以从读取结果开始。下面是 MCP `tools/call` 的 `params`，在数据集已写入后即可使用。
+
+```json
+{
+  "name": "dataset_read",
+  "arguments": {
+    "datasetName": "bookshop_demo",
+    "page": 1,
+    "pageSize": 4,
+    "fields": ["title", "price"]
+  }
+}
+```
 
 ### 使用工作流和数据集
 
-| 用途 | MCP 工具 | 示例 |
-| --- | --- | --- |
-| 确认连接、读取页面 | `connection_status`、`connection_ping`、`browser_context`、`page_probe` | “列出当前标签页，查看所选商品列表页能提取哪些字段。” |
-| 查找或编排工作流 | `workflow_list`、`workflow_get`、`workflow_contract`、`workflow_save` | “把当前页面的商品名称和价格采集规则保存为工作流。” |
-| 执行并检查结果 | `workflow_run`、`run_get`、`run_control` | “在当前列表页运行刚才的工作流，再告诉我状态和最近日志。” |
-| 读取采集数据 | `dataset_list`、`dataset_read` | “找到商品数据集，读取前 20 行，只返回商品名称和价格。” |
+| 你在聊天中可以这样说 | MCP 会怎么做 |
+| --- | --- |
+| 「我在书店搜好了这次的关键词，用已保存的 Bookshop demo 采当前结果页。」 | 你在书店输入任意关键词并点击搜索，然后在聊天中确认结果页已打开。`workflow_list` 按名称找已有规则，`browser_context` 定位实际结果页，`workflow_run` 在该页执行。同一规则可以用于不同关键词。 |
+| 「给 Bookshop demo 增加详情页网址列，先展示试采结果，再保存。」 | `workflow_get` 读取原规则，`page_probe` 验证书名链接的 `href`。更新时，`workflow_save.workflow.workflowId` 使用原编号。核对说明与使用方法后保存，再请你确认要不要执行。 |
+| 「暂停刚才那次运行。」或「继续刚才暂停的运行。」 | `run_control` 带该次 `runId`、新 UUID 及 `action`（`pause` 或 `resume`）。明确要求结束时使用 `abort`。`run_get` 可核对结果。暂停时正在执行的页面动作仍可能完成，结束会保留已经写入的数据。 |
+| 「只看已存数据。读 bookshop_demo 第 2 页，每页 4 行，只显示 title 和 price。」 | `dataset_read` 传 `page: 2`、`pageSize: 4` 与指定列。完成首页和第 2 页两次采集后，数据集共 8 行。`run.savedRows` 只统计单次运行。 |
 
-保存新工作流或修改已有工作流后，客户端应等你确认再执行。启动返回 `runId`，用 `run_get` 查询完成状态。写操作超时后，先用原 UUID 请求编号查询 `connection_status`，再核对最近运行。暂停可能仍有在途动作，结束运行不会撤销已执行的操作。
-
-`dataset_read` 按 `datasetId` 或 `datasetName` 精确读取，两者任选其一。页码从 1 开始，默认每页 50 行、最多 200 行，`fields` 可指定字段。采集仍在进行时，翻页读到的是当时的数据。单次结果上限为 256 KiB，超限时请减小页大小或减少字段。
+`dataset_read` 只接受 `datasetId`、`datasetName` 中的一个，页码从 1 开始，默认每页 50 行、最多 200 行。根据 `hasNext` 和 `nextPage` 继续翻页。运行中读取的是当时的数据。单次响应上限 256 KiB，超限时减小 `pageSize` 或减少 `fields`。
 
 ### 管理多个浏览器配置
 
@@ -52,7 +78,11 @@ jtcrpa-mcp config --connection c1 --client codex
 
 | 现象 | 处理 |
 | --- | --- |
-| 扩展设置里找不到「MCP 连接」 | 到官网查看九头虫 Agent 更新。安装带有「MCP 连接」入口的扩展版本后，再运行注册命令。[九头虫 RPA 官网与扩展下载](https://jtcrpa.com/) |
+| 在侧边栏底部的设置菜单找不到「MCP 连接」 | 确认装的是九头虫 Agent。Chrome 和 Firefox 商店发布的 `2.0.2` 缺少此功能。如果已从官方取得支持 MCP 的 Chrome 压缩包，解压后在 `chrome://extensions` 打开「开发者模式」，点「加载已解压的扩展程序」并选择含 `manifest.json` 的目录。打开这份扩展的 MCP 页面，复制它自己的注册命令。[联系九头虫](https://jtcrpa.com/contact) |
+| `codex mcp list` 没有 `jtcrpa` | 从扩展的「接入外部 AI → Codex」重新复制完整命令，在准备运行 Codex 的同一 Windows 账户下执行，再打开新会话。 |
+| 能收到回声却找不到书店标签页 | 在已连接的浏览器配置中新开书店网页，再让 AI 列出标签页。已在安装扩展前打开的书店页可以刷新一次。 |
+| 已有 `runId`，聊天里没有任何行 | 用 `run_get` 查本次状态和 `savedRows`。失败时看最近日志。成功但写入 0 行时，检查目标标签页及抽取节点的 `dataset_name`，并重新试采。已有写入却找不到列时，先让 AI 用 `dataset_list` 核对数据集名称和 `fields`。 |
+| 写入请求超时 | 把原 `requestId` 传给 `connection_status` 核对请求状态。启动请求还可用 `run_get` 按 `workflowId` 查最近运行，再决定是否重试。 |
 | PowerShell 提示「禁止运行脚本」（`.ps1`） | 把当前命令开头的 `npm` 换成 `npm.cmd`，或把 `jtcrpa-mcp` 换成 `jtcrpa-mcp.cmd`，参数照写。例如 `jtcrpa-mcp.cmd list`。 |
 | 终端找不到 `jtcrpa-mcp` | 运行 `npm prefix -g` 查看全局命令目录。确认该目录已加入 `PATH`，重新打开终端后用 `jtcrpa-mcp --version` 检查。 |
 | npm 镜像提示找不到刚发布的包 | 直接从官方源安装，运行 `npm install --global jtcrpa-mcp --registry=https://registry.npmjs.org`。 |
@@ -74,32 +104,58 @@ npm uninstall --global jtcrpa-mcp
 
 ## English
 
-[First-time setup](../README.md#english)
+[Go from installation to your first table](../README.md#first-time-setup) · [Already connected? Start the bookshop exercise](../README.md#collect-your-first-four-books)
 
 ### Client configuration
 
-Once the browser is connected, choose your client under **Connect an AI app** in the extension. For Codex, make sure the `codex` command is available in your terminal.
+On the extension’s **MCP connection** page, wait for **Browser connected to the local program**. The **Register this browser** command uses `add --chrome-id` or `add --firefox-id` to let this extension communicate with the bridge. The client command under **Connect an AI app** includes the instance ID for this browser profile. Copy the commands from the page to use the right ID in each place.
 
-| Client | How to use the command or configuration from the extension |
-| --- | --- |
-| Codex | Run the full `codex mcp add` command in PowerShell. It saves a service named `jtcrpa`. Reconnect the MCP client or restart Codex. |
-| Claude Code | Run the generated `config` command in PowerShell. Merge the resulting `mcpServers.jtcrpa` entry into the project’s `.mcp.json`, restart Claude Code and check `/mcp`. |
-| DeepSeek Harness | Run the generated `config` command in PowerShell, add the resulting plugin entry to the Harness plugin list and restart the client. |
+| Client | What to do the first time | How to check |
+| --- | --- | --- |
+| Codex | In the extension, select **Codex → Copy Codex setup command**. Run the entire line in PowerShell. It uses `codex mcp add jtcrpa` to register the current profile. Run `codex mcp list` and open a new session. | Check for `jtcrpa` in the terminal list, then send the first bookshop message in chat and verify the title and price. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
+| Claude Code | Select **Claude Code** in the extension and run its configuration command in PowerShell. If your project has no `.mcp.json`, create one in its root and paste the full output. For an existing file, add the `jtcrpa` entry to its `mcpServers` object. | Reopen Claude Code in that project, approve the project server if prompted, enter `/mcp` and look for `jtcrpa`. Try the same bookshop message. [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) |
+| DeepSeek Harness | Select **DeepSeek Harness** and run the copied command in PowerShell. In Harness Web or Desktop Settings, add an MCP server named `jtcrpa`, select `stdio`, and copy `command` and each item in `args` from the generated `config`. For a plugin-based profile, add the generated `mcp-jtcrpa` entry to its plugin list. | Restart Harness with this configuration. Ask it to use `mcp__jtcrpa__connection_ping` to echo `bookshop`. [Harness settings](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [Plugin configuration example](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
 
-Codex has been tested end to end with MCP-enabled extension builds on Chrome and Firefox. Configuration generation is available for Claude Code and DeepSeek Harness. Equivalent end-to-end testing for those two clients is pending.
+The Codex integration has been tested with Chrome and Firefox. Bridge configuration generation has been verified for Claude Code and DeepSeek Harness. Full collection runs in those two clients are pending.
+
+### Tool calls for the bookshop example
+
+These are the calls behind the three chat messages in the README. Enter the prompts in chat. Your AI client sends the tool calls to `jtcrpa`. Use the results below to see how far it got.
+
+| Action | Tool and arguments sent by the client | What to check |
+| --- | --- | --- |
+| 1. Check the connection and find the page | Call `connection_status` with `{}`, `connection_ping` with `{"text":"bookshop"}` and `browser_context` with `{}`. | Look for `connected: true` and `text: "bookshop"`. Find the bookshop URL in `tabs` and take the `tabId` from that entry. |
+| 2. Inspect the page and preview a row | Call `workflow_contract` with `{"nodeTools":["emitExtractNode"],"probeTools":["snapshot","probeExtract"]}`. Use the selected `tabId` for both `page_probe` calls. Start with `tool: "snapshot"`, then use `tool: "probeExtract"` with the card `selectors` and two column `steps` in `params`. | The snapshot contains a book title. On the homepage `totalMatched` is 4. The `sample` preview shows `title` and `price` for just the first two rows. |
+| 3. Save and check the rule | Pass `tabId`, a fresh UUID `requestId` and the full `workflow` object to `workflow_save`. The linked bookshop rule supplies that object. Call `workflow_get` with the returned `workflowId`. | A new workflow returns `ok: true`, `updated: false` and its `workflowId`. Check the output dataset is `bookshop_demo`. With `nextAction.type` equal to `confirm_execution`, wait for a separate user confirmation. |
+| 4. Start and wait for completion | After confirmation, call `workflow_run` with that `workflowId`, the target `tabId` and a new UUID for this run’s `requestId`. Pass the returned `runId` to `run_get`. Add `logLimit: 3` for recent logs. | Use `runId` to follow this run. Wait for `run.status` to reach `SUCCESS`. In this example `run.savedRows` is 4. If it reaches `FAILED`, read the `logs` in the same response. |
+| 5. Read the stored rows | Send `{"query":"bookshop_demo"}` to `dataset_list`. Check `datasetName`, `fields` and `rowsCount` in `datasets`. Call `dataset_read` with the exact `datasetName`, or pass the returned `id` as `datasetId`. | After the first run on an empty dataset, `total` is 4 and `rows` includes *Between Mountains and Seas* at ¥32.00. |
+
+The example file is the complete **workflow argument** for `workflow_save`. To reproduce the preview, take `selectors` and `steps` from its first node and pass them as the `params` of `probeExtract`. Get the current tab ID from `browser_context` and generate write-request UUIDs in the client. [View the complete bookshop workflow JSON](examples/bookshop-workflow.json)
+
+To check what your own client sends after it has saved the data, start with this `params` object for MCP `tools/call`.
+
+```json
+{
+  "name": "dataset_read",
+  "arguments": {
+    "datasetName": "bookshop_demo",
+    "page": 1,
+    "pageSize": 4,
+    "fields": ["title", "price"]
+  }
+}
+```
 
 ### Work with workflows and datasets
 
-| Task | MCP tools | Example request |
-| --- | --- | --- |
-| Check the connection and inspect a page | `connection_status`, `connection_ping`, `browser_context`, `page_probe` | “List the tabs and check which fields can be extracted from the selected product listing.” |
-| Find or create a workflow | `workflow_list`, `workflow_get`, `workflow_contract`, `workflow_save` | “Save a workflow that collects product names and prices from this page.” |
-| Run a workflow and check the result | `workflow_run`, `run_get`, `run_control` | “Run that saved workflow on this listing and show its status and recent logs.” |
-| Read collected data | `dataset_list`, `dataset_read` | “Find the product dataset and show the first 20 rows with just names and prices.” |
+| What you can ask in chat | What the MCP client does |
+| --- | --- |
+| “I’ve searched the bookshop for my keyword. Run my saved Bookshop demo on the results page.” | Enter any search term in the bookshop and click **Search**, then send the message. `workflow_list` finds the saved rule by name, `browser_context` identifies the open results tab and `workflow_run` runs it there. The same rule works with different terms. |
+| “Add a details URL column to Bookshop demo. Preview it, then save the change.” | `workflow_get` loads the original and `page_probe` checks the title link’s `href`. Pass the original ID as `workflow_save.workflow.workflowId`. After reviewing the description and instructions, save the change and wait for confirmation to run. |
+| “Pause the run you just started.” or “Resume that paused run.” | `run_control` takes this `runId`, a new request UUID and the `pause` or `resume` action. Use `abort` when the user asks to stop. Check the result with `run_get`. An in-flight page action may finish after a pause. Stopping preserves data already written. |
+| “Read page 2 of the stored bookshop_demo dataset, four rows per page. Show only title and price.” | `dataset_read` takes `page: 2`, `pageSize: 4` and the chosen fields. After collecting both bookshop pages, the dataset contains eight rows. `run.savedRows` counts only the rows written by that particular run. |
 
-After saving a new or edited workflow, the client should wait for your confirmation before running it. Starting a workflow returns a `runId`. Use `run_get` to check whether it finished. If a write times out, query `connection_status` with the original request UUID and check recent runs before retrying. An action already in progress can finish after a pause. Stopping a run does not undo actions it has already taken.
-
-For `dataset_read`, supply exactly one of `datasetId` and `datasetName`. Pages start at 1, with 50 rows by default and a maximum of 200. Use `fields` to select columns. Pages reflect live data if collection is still running. If a result exceeds 256 KiB, request fewer rows or columns.
+Supply exactly one of `datasetId` or `datasetName` to `dataset_read`. Pages start at 1, with 50 rows by default and at most 200 per page. Follow `hasNext` and `nextPage` to keep reading. While a run is active, each read reflects the data at that moment. If the response exceeds 256 KiB, reduce `pageSize` or select fewer `fields`.
 
 ### Manage multiple browser profiles
 
@@ -122,7 +178,11 @@ The supported client identifiers are `codex`, `claude` and `deepseek`. Omit `--c
 
 | Symptom | What to do |
 | --- | --- |
-| MCP connection is missing from the extension settings | Check the official website for Jiutouchong Agent updates. Install a build that shows **MCP connection** in Settings, then run its registration command. [Official website and extension downloads](https://jtcrpa.com/en) |
+| MCP connection is missing from the sidebar’s Settings menu | Check the extension name is Jiutouchong Agent. The Chrome and Firefox store releases of `2.0.2` lack this feature. If you received an MCP-enabled Chrome ZIP from Jiutouchong, extract it, open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and select the folder containing `manifest.json`. Open that extension’s MCP page and copy its own registration command. [Contact Jiutouchong](https://jtcrpa.com/en/contact) |
+| `codex mcp list` has no `jtcrpa` entry | Under **Connect an AI app → Codex**, copy the entire command. Run it under the same Windows account you use for Codex, then open a new session. |
+| The echo works, but the bookshop tab is missing | Open the bookshop in the connected profile and ask the client to list tabs again. If the page was open before installing the extension, refresh it. |
+| You have a `runId` but see no rows | Use `run_get` to check the run’s status and `savedRows`. Read recent logs on failure. For a successful run with zero writes, check the tab and the extraction node’s `dataset_name`, then preview the extraction again. If rows were saved but a column is missing, use `dataset_list` to check the dataset name and `fields`. |
+| A write request timed out | Pass its original `requestId` to `connection_status` to inspect the request. For a start request, also query recent runs with `run_get` filtered by `workflowId` before retrying. |
 | PowerShell says running scripts is disabled (`.ps1`) | Replace `npm` with `npm.cmd`, or `jtcrpa-mcp` with `jtcrpa-mcp.cmd`, at the start of the command. Keep the same arguments, for example `jtcrpa-mcp.cmd list`. |
 | The terminal cannot find `jtcrpa-mcp` | Run `npm prefix -g` to locate the global command directory. Check that it is on your `PATH`, reopen the terminal and run `jtcrpa-mcp --version`. |
 | An npm mirror cannot find a newly published version | Install from the public registry with `npm install --global jtcrpa-mcp --registry=https://registry.npmjs.org`. |
