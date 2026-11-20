@@ -2,7 +2,8 @@
   "name": "jtcrpa-mcp",
   "version": "0.4.1",
   "type": "module",
-  "description": "Windows Native Messaging bridge for Jiutouchong / 九头虫浏览器扩展的 Windows MCP 桥接器",
+  "description": "在 Windows 上用 Codex 等 AI 客户端连接九头虫 Agent，创建和运行网页采集工作流、读取数据集。Connect AI clients to Jiutouchong Agent on Windows via MCP to create and run web scraping workflows and read datasets.",
+  "homepage": "https://jtcrpa.com/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zhulinjia/jtcrpa-mcp-bridge.git"
