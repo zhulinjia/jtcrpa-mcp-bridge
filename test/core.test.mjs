@@ -57,6 +57,11 @@ test('real protected pipe routes concurrent requests and cleans discovery on EOF
         assert.equal((await callExtension({ bindingId }, 'connection_ping', { text: '稳定绑定' })).text, '稳定绑定');
         const results = await Promise.all(['中文', 'two', 'three'].map((text) => callExtension(id, 'connection_ping', { text })));
         assert.deepEqual(results.map((result) => result.text), ['中文', 'two', 'three']);
+        for (let batch = 0; batch < 8; batch++) {
+            const messages = Array.from({ length: 7 }, (_, n) => `batch-${batch}-${n}`);
+            const replies = await Promise.all(messages.map(text => callExtension(id, 'connection_ping', { text })));
+            assert.deepEqual(replies.map(reply => reply.text), messages);
+        }
         assert.ok(fs.existsSync(instanceFile(id)));
         const record = JSON.parse(fs.readFileSync(instanceFile(id), 'utf8'));
         const pipeName = record.pipe.split('\\').at(-1);

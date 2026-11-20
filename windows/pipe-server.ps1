@@ -21,7 +21,7 @@ public static class JtcPipeServer {
     static readonly ConcurrentDictionary<int, NamedPipeServerStream> streams = new ConcurrentDictionary<int, NamedPipeServerStream>();
     static int nextId;
     static int active;
-    static bool stopping;
+    static volatile bool stopping;
     static void Output(string text) { lock(outputLock) { Console.Out.WriteLine(text); Console.Out.Flush(); } }
     static string ReadLimited(TextReader reader) {
         var data = new System.Text.StringBuilder();
@@ -71,11 +71,13 @@ public static class JtcPipeServer {
                 try {
                     pipe.WaitForConnection();
                     var accepted=pipe;
+                    // Keep the accepted handle alive until the next listener exists. Windows
+                    // removes the pipe name as soon as its last server handle is closed.
+                    while(!stopping && Interlocked.CompareExchange(ref active,0,0)>=7) Thread.Sleep(20);
+                    if(stopping) { accepted.Dispose(); break; }
+                    pipe=Create(name);
                     Interlocked.Increment(ref active);
                     Task.Run(()=>Handle(accepted));
-                    while(!stopping && Interlocked.CompareExchange(ref active,0,0)>=7) Thread.Sleep(20);
-                    if(stopping) break;
-                    pipe=Create(name);
                 } catch(Exception e) { if(!stopping) Console.Error.WriteLine(e.Message); break; }
             }
         });

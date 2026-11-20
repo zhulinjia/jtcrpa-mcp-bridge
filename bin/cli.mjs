@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import pkg from '../package.json' with { type: 'json' };
+import { createRequire } from 'node:module';
 import { parseArgs } from 'node:util';
+const pkg = createRequire(import.meta.url)('../package.json');
 const [command, ...args] = process.argv.slice(2);
 const usage = [
     'Usage: jtcrpa-mcp <command>',
