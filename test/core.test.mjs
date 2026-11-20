@@ -28,9 +28,14 @@ test('real protected pipe routes concurrent requests and cleans discovery on EOF
     process.env.JTCRPA_BRIDGE_HOME = root;
     fs.mkdirSync(path.join(root, 'instances'));
     fs.writeFileSync(path.join(root, 'installation.json'), '{}');
-    execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.resolve(here, '../windows/secure-directory.ps1'), '-Directory', root], { windowsHide: true });
+    const extensionId = 'a'.repeat(32);
     const id = randomUUID();
-    const child = spawn(process.execPath, [path.resolve(here, '../bin/cli.mjs'), 'native-host'], { env: process.env, windowsHide: true });
+    const bindingId = randomUUID();
+    fs.writeFileSync(path.join(root, 'connections.json'), JSON.stringify({ nextId: 2, connections: [
+        { id: 'c1', bindingId, kind: 'chrome', extensionId, instanceId: id },
+    ], observed: [] }));
+    execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.resolve(here, '../windows/secure-directory.ps1'), '-Directory', root], { windowsHide: true });
+    const child = spawn(process.execPath, [path.resolve(here, '../bin/cli.mjs'), 'native-host', `chrome-extension://${extensionId}/`], { env: process.env, windowsHide: true });
     let stderr = '';
     child.stderr.on('data', (data) => { stderr += data.toString(); });
     const exited = new Promise((resolve) => child.once('exit', resolve));
@@ -46,6 +51,10 @@ test('real protected pipe routes concurrent requests and cleans discovery on EOF
     try {
         child.stdin.write(nativeFrame({ type: 'hello', version: 1, instanceId: id }));
         await ready;
+        const { listConnections } = await import('../src/connections.ts');
+        const [connected] = listConnections().connections;
+        assert.deepEqual(connected.candidates, [{ instanceId: id, online: true }]);
+        assert.equal((await callExtension({ bindingId }, 'connection_ping', { text: '稳定绑定' })).text, '稳定绑定');
         const results = await Promise.all(['中文', 'two', 'three'].map((text) => callExtension(id, 'connection_ping', { text })));
         assert.deepEqual(results.map((result) => result.text), ['中文', 'two', 'three']);
         assert.ok(fs.existsSync(instanceFile(id)));
@@ -67,6 +76,9 @@ test('real protected pipe routes concurrent requests and cleans discovery on EOF
         child.stdin.end();
         await exited;
         assert.equal(fs.existsSync(instanceFile(id)), false);
+        const [offline] = listConnections().connections;
+        assert.equal(offline.instanceId, id);
+        assert.equal(offline.status, 'offline');
     } finally {
         child.kill();
         if (previous === undefined) delete process.env.JTCRPA_BRIDGE_HOME; else process.env.JTCRPA_BRIDGE_HOME = previous;

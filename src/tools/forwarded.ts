@@ -1,10 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import { callExtension } from '../ipc.ts';
+import { callExtension, type McpTarget } from '../ipc.ts';
 import type { ForwardedToolDefinition } from './definition.ts';
 
 export function registerForwardedTools(
     server: McpServer,
-    instanceId: string,
+    target: McpTarget,
     definitions: readonly ForwardedToolDefinition[],
 ) {
     for (const definition of definitions) {
@@ -17,17 +17,17 @@ export function registerForwardedTools(
                 destructiveHint: !definition.readOnly,
                 openWorldHint: definition.openWorld,
             },
-        }, (params) => forwardToolCall(instanceId, definition, params));
+        }, (params) => forwardToolCall(target, definition, params));
     }
 }
 
 async function forwardToolCall(
-    instanceId: string,
+    target: McpTarget,
     definition: ForwardedToolDefinition,
     params: unknown,
 ) {
     try {
-        const result = await callExtension(instanceId, definition.name, params);
+        const result = await callExtension(target, definition.name, params);
         return toToolResult(result);
     } catch (error) {
         const failure: { error: string; message?: string } = {

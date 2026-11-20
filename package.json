@@ -1,9 +1,10 @@
 {
   "name": "jtcrpa-mcp",
-  "version": "0.1.0",
+  "version": "0.4.1",
   "type": "module",
   "description": "Windows Native Messaging bridge for the Jiutouchong browser extension",
   "engines": { "node": ">=24.0.0" },
+  "os": ["win32"],
   "bin": { "jtcrpa-mcp": "bin/cli.mjs" },
   "files": ["bin", "dist", "windows", "README.md"],
   "scripts": {

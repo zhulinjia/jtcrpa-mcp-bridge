@@ -1,9 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod/v4';
-import { callExtension } from '../ipc.ts';
+import { callExtension, type McpTarget } from '../ipc.ts';
+import { findBinding } from '../connections.ts';
 
 // 连接状态和回声测试的离线返回不同，保留各自的处理语义。
-export function registerConnectionTools(server: McpServer, instanceId: string) {
+export function registerConnectionTools(server: McpServer, target: McpTarget) {
     server.registerTool('connection_status', {
         description: '查询所配置的九头虫浏览器实例及其连接状态。',
         inputSchema: z.object({
@@ -13,9 +14,11 @@ export function registerConnectionTools(server: McpServer, instanceId: string) {
     }, async (params) => {
         let result: unknown;
         try {
-            result = await callExtension(instanceId, 'connection_status', params);
+            result = await callExtension(target, 'connection_status', params);
         } catch (error) {
-            result = { connected: false, instanceId, error: (error as Error).message };
+            const binding = typeof target === 'string' ? undefined : findBinding(target.bindingId);
+            result = { connected: false, instanceId: typeof target === 'string' ? target : binding?.instanceId ?? null,
+                connectionId: binding?.id, error: (error as Error).message };
         }
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
     });
@@ -28,7 +31,7 @@ export function registerConnectionTools(server: McpServer, instanceId: string) {
         annotations: { readOnlyHint: true, idempotentHint: true },
     }, async ({ text }) => {
         try {
-            const result = await callExtension(instanceId, 'connection_ping', { text });
+            const result = await callExtension(target, 'connection_ping', { text });
             return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         } catch (error) {
             return { isError: true, content: [{ type: 'text' as const, text: (error as Error).message }] };

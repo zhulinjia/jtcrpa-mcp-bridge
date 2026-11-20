@@ -13,7 +13,7 @@
 - `src/tools/execution.ts`：启动、运行查询与运行控制定义。
 - `src/tools/datasets.ts`：数据集元数据查询与分页读取定义。
 - `src/tools/definition.ts`：转发工具的类型契约；只读及外部副作用属性由每个定义明确声明。
-- `src/install.ts`：安装命令分发、独立的安装 / 卸载流程、参数解析、清单生成与文件备份恢复。
+- `src/connection-cli.ts` 提供连接列表和交互删除。`src/connections.ts` 保存稳定编号、目标和浏览器握手确认过的实例。`src/install.ts` 同步登记与宿主清单，`src/registration-lock.ts` 串行处理当前用户的变更。
 - `src/native-host-registry.ts`：Chrome / Firefox 原生宿主注册表路径及查询、注册、删除与尽力恢复操作；查询使用 `windows/read-registration.ps1` 返回 UTF-8 JSON，保留中文路径。
 
 CLI 在命令入口按需装配对应模块；MCP 模块内部使用静态导入。工具定义拆分不改变对外名称、描述、参数 Schema、属性及返回处理。
@@ -42,17 +42,17 @@ Native 信封上限 512 KiB，业务结果预算 256 KiB，按 UTF-8 计量；�
 
 ## 本地安装
 
-统一通过 npm 全局安装。包发布后，在 PowerShell 执行：
+在 Windows PowerShell 中从 npm 全局安装桥接器。
 
 ```powershell
-npm install --global jtcrpa-mcp
+npm.cmd install --global jtcrpa-mcp
 ```
 
-当前包尚未发布到 npm，以上为发布后的正式安装命令。开发者可从本仓库根目录生成并安装本地包。已有测试安装可继续使用。
+本地测试时，也可以安装从源码生成的压缩包。
 
 ```powershell
-npm pack
-npm install --global .\jtcrpa-mcp-0.1.0.tgz
+npm.cmd pack
+npm.cmd install --global .\jtcrpa-mcp-0.4.1.tgz
 ```
 
 首次从源码打包前，按下方开发步骤运行 `npm ci`。
@@ -60,16 +60,34 @@ npm install --global .\jtcrpa-mcp-0.1.0.tgz
 在插件设置菜单打开「MCP 连接」，复制本浏览器的注册命令并运行。例如：
 
 ```powershell
-jtcrpa-mcp install --chrome-id <真实Chrome扩展ID>
-jtcrpa-mcp install --firefox-id 379522770@qq.com
+jtcrpa-mcp.cmd add --chrome-id <真实Chrome扩展ID>
+jtcrpa-mcp.cmd add --firefox-id 379522770@qq.com
 ```
 
-两条命令分别安装各浏览器白名单，可连续运行。当前用户注册，无需管理员；只接受明确扩展 ID。安装路径必须稳定，不要从临时 npx 缓存注册宿主。移动包、更新 Node 路径后需关闭插件 MCP 连接并重新执行 install。
+首次添加会为当前 Windows 用户注册本机宿主。同一浏览器的多个扩展 ID 可以分别添加，重复执行同一条命令会复用已有授权。已有连接可以继续使用。请从稳定的安装目录运行命令。移动包或更换 Node 路径后，关闭 MCP 连接，重新执行对应的 `jtcrpa-mcp add` 命令以更新启动器。
 
-开启页面连接开关并授予本机通信权限。Codex 用户可复制页面提供的接入命令，在 PowerShell 执行一次：
+开启扩展的 MCP 连接后，可以在 PowerShell 管理登记。浏览器关闭后仍能查到记录。
 
 ```powershell
-codex mcp add jtcrpa -- cmd.exe /d /c jtcrpa-mcp mcp --instance <页面显示的实例ID>
+jtcrpa-mcp.cmd list
+jtcrpa-mcp.cmd add --chrome-id <扩展ID> --instance <列表中的UUID>
+jtcrpa-mcp.cmd remove
+```
+
+`list` 显示完整扩展 ID、已确认的浏览器实例 UUID 和在线状态。使用 `add --instance` 为待选登记指定目标，首次选择沿用原编号。对同一目标重复添加会复用该编号，同一扩展下的另一个实例会获得独立编号。Firefox 使用 `--firefox-id`。运行 `remove` 后按序号选择并确认。
+
+用列表编号为客户端生成配置。例如，以下命令生成绑定当前登记 `c1` 的 Codex 配置。客户端使用生成的绑定 UUID。删除登记后旧配置失效，重新安装时可以重新使用显示编号。
+
+```powershell
+jtcrpa-mcp.cmd config --connection c1 --client codex
+```
+
+从旧测试包升级时，原先手填 `mcp --connection c1` 的客户端需要重新生成一次配置。
+
+脚本可用 `list --json` 读取登记，用 `remove c1` 删除指定记录。需要换扩展或换已选实例时，先添加新连接，将客户端指向新编号，再删除旧登记。也可用扩展页面的命令直接连接指定的浏览器实例。
+
+```powershell
+cmd.exe /d /c codex mcp add jtcrpa -- cmd.exe /d /c jtcrpa-mcp mcp --instance <页面显示的实例ID>
 ```
 
 需要终端已能运行 `codex` 和 npm 全局命令 `jtcrpa-mcp`；命令直接保存 Codex 配置，无需手动编辑 TOML。成功后重新连接 MCP 或重启 Codex，在聊天中发送「检查九头虫 MCP 连接，并列出当前浏览器标签页。」确认可用。该命令固定服务名为 `jtcrpa`，配置多个实例时应改用不同服务名。
@@ -77,8 +95,7 @@ codex mcp add jtcrpa -- cmd.exe /d /c jtcrpa-mcp mcp --instance <页面显示的
 其它客户端或需要自行管理配置时，仍可生成配置：
 
 ```powershell
-jtcrpa-mcp instances
-jtcrpa-mcp config --instance <页面显示的实例ID>
+jtcrpa-mcp.cmd config --instance <页面显示的实例ID>
 ```
 
 命令返回 Codex 的 TOML、Claude Code 的 MCP JSON，以及 DeepSeek Harness 的 MCP 插件配置。配置使用当前 Node 和包入口的绝对路径；DeepSeek 部分加到其插件列表中。每个浏览器配置使用独立实例 ID。多个实例需要在客户端使用不同的 MCP 服务名；浏览器关闭时返回离线，连接不会自动切换到其它实例。复制浏览器配置造成实例冲突时，可在插件页显式生成新实例 ID，再更新客户端配置。
@@ -88,40 +105,39 @@ jtcrpa-mcp config --instance <页面显示的实例ID>
 关闭所有浏览器配置中的 MCP 开关，再运行：
 
 ```powershell
-jtcrpa-mcp uninstall
+jtcrpa-mcp.cmd uninstall
 ```
 
-只清理指向本安装目录的注册，保留其它原生宿主。随后可运行 `npm uninstall --global jtcrpa-mcp` 移除全局包；开发用 npm link 按其安装方式移除。更新包时先关闭全部 MCP 连接，安装新包，再重新执行各浏览器的注册命令；移动全局目录或切换 Node 后还应重新生成客户端配置。安装目录默认 `%LOCALAPPDATA%\Jtcrpa\McpBridge`，`JTCRPA_BRIDGE_HOME` 仅供隔离验收指定独立目录。
-
-早期本地包名为 `@jtcrpa/mcp-bridge`、命令为 `jtcrpa-bridge`。切换名称前先关闭全部 MCP 连接，使用旧命令卸载宿主并按原安装方式移除旧包，再通过 npm 安装新包、注册浏览器并重新生成客户端配置。
+只清理指向本安装目录的注册，保留其它原生宿主。随后可运行 `npm uninstall --global jtcrpa-mcp` 移除全局包。开发用 npm link 按其安装方式移除。原地更新包后，新进程会加载新版。安装目录默认 `%LOCALAPPDATA%\Jtcrpa\McpBridge`，`JTCRPA_BRIDGE_HOME` 仅供隔离验收指定独立目录。
 
 若开发命令提示找不到 `dist/*.js`，先在源码目录运行 `npm run build`。若全局包提示不支持在 node_modules 中移除类型，说明仍在使用直接加载 `.ts` 的旧安装包，应重新打包并安装含 `dist/` 的版本。
 
-含中文路径的注册查询与启动器均按 UTF-8 处理。更新旧安装后需重新执行注册命令，以刷新宿主启动器；仅更新 npm 包不会重写已有 host.cmd。
+注册查询和启动器均支持 UTF-8 中文路径。移动全局目录或更换 Node 路径后，使用绝对路径接入的 AI 客户端也需更新其配置。
 
 ## 通信边界
 
 MCP stdio 由官方 SDK 实现。浏览器原生宿主与 MCP 进程是两个 Node 进程；前者通过随包的 Windows PowerShell 脚本创建管道。管道显式仅授权当前用户并拒绝 Network SID，发现目录也限制当前用户访问；每次宿主会话另有随机认证令牌。令牌不会返回给 MCP 工具。此信任范围包含当前系统用户的本地进程。
 
-消息上限为 512 KiB，工具输入按白名单校验。浏览器离线不阻塞 MCP 初始化和工具发现。断开不执行任何业务重放。协议版本或同时在线的实例 ID 冲突会明确报错。`instances` 只显示实例 ID 和进程存活状态，工具调用仍以实际通信结果为准。
+消息上限为 512 KiB，工具输入按白名单校验。浏览器离线不阻塞 MCP 初始化和工具发现。断开不执行任何业务重放。协议版本或同时在线的实例 ID 冲突会明确报错。`list` 通过本机管道确认浏览器是否在线，并保留已登记的离线实例。
 
 ## 开发与发包
 
 在桥接器仓库根目录运行以下命令。
 
 ```powershell
-npm ci
-npm run check
-npm test
-npm pack
+npm.cmd ci
+npm.cmd run check
+npm.cmd test
+npm.cmd pack
 ```
 
 `npm test` 和 `npm pack` 都会先编译。`npm pack` 生成 `jtcrpa-mcp-<版本>.tgz`。确认验收后，可以将同一份 `.tgz` 作为 `npm publish` 的输入。开发时可用 `npm link`，源码更新后运行 `npm run build` 刷新 CLI 加载的 `dist/`。
 
-在插件仓库根目录用生成的 `.tgz` 验证真实安装。下例对应两个仓库并列检出且桥接器版本为 `0.1.0`。
+在插件仓库根目录用生成的 `.tgz` 验证真实安装。下例对应两个仓库并列检出且桥接器版本为 `0.4.1`。
 
 ```powershell
-node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.1.0.tgz --install-only
+node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.4.1.tgz --install-only
+node tests/mcp-package/run.mjs ../jtcrpa-mcp-bridge/jtcrpa-mcp-0.4.1.tgz --isolated-host
 ```
 
-`--install-only` 检查包内容、全局命令、客户端配置及官方 SDK 的离线调用，可以在日常桥接运行时执行。去掉该参数后，还会测试宿主注册、升级和 Chrome / Firefox 联调，需要使用当前用户下没有同名宿主注册的 Windows 测试环境。插件仓库的 `docs/2026-11-06-mcp-package-acceptance.md` 记录完整入口和报告位置。
+`--install-only` 验证受限 PowerShell 的全局安装、连接管理和官方 SDK 离线调用。`--isolated-host` 还会用独立的 Windows 注册表宿主名、临时浏览器配置和同一份安装包验证升级、卸载、Chrome / Firefox 在线工具与数据读取。专用 Windows 测试帐户可省略参数，验证正式宿主名。完整入口和报告位置见插件仓库的 `docs/2026-11-06-mcp-package-acceptance.md`。

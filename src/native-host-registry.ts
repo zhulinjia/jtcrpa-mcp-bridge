@@ -20,8 +20,7 @@ export function readHostRegistration(kind: BrowserKind): string | undefined {
         '-RegistryPath', registryKey(kind).slice('HKCU\\'.length),
     ], { encoding: 'utf8', windowsHide: true });
     // 脚本直接读取注册值并返回 UTF-8 JSON，避免解析 reg.exe 的本地代码页输出。
-    // 查询失败仍沿用 undefined 语义，不代表已确认不存在。
-    if (result.status !== 0) return undefined;
+    if (result.status !== 0) throw new Error(`Could not read the ${kind} host registration: ${result.error?.message ?? result.stderr}`);
     const value: unknown = JSON.parse(result.stdout);
     return typeof value === 'string' ? value : undefined;
 }

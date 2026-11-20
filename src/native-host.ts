@@ -7,11 +7,15 @@ import readline from 'node:readline';
 import { bridgeRoot, instanceFile, type Discovery } from './paths.ts';
 import { MAX_BYTES, nativeDecoder, nativeFrame, validInstance, VERSION } from './protocol.ts';
 import { METHODS } from './methods.ts';
+import { nativeCaller } from './browser-identity.ts';
+import { rememberInstance } from './connections.ts';
 
-export async function runNativeHost() {
+export async function runNativeHost(args: string[]) {
+    const caller = nativeCaller(args);
     let helper: ChildProcessWithoutNullStreams | undefined;
     let record: Discovery | undefined;
     let claimed = false;
+    let closed = false;
     let helloTimer: NodeJS.Timeout | undefined;
     let startupTimer: NodeJS.Timeout | undefined;
     let sequence = 0;
@@ -20,6 +24,7 @@ export async function runNativeHost() {
     const respond = (clientId: number, body: unknown) => helper?.stdin.write(JSON.stringify({ clientId, body }) + '\n');
     const fail = (message: string) => { send({ type: 'error', error: message }); cleanup(); helper?.kill(); process.exitCode = 1; process.stdin.destroy(); };
     function cleanup() {
+        closed = true;
         clearTimeout(helloTimer); clearTimeout(startupTimer);
         for (const item of pending.values()) clearTimeout(item.timer);
         pending.clear();
@@ -43,6 +48,7 @@ export async function runNativeHost() {
             if (!fs.existsSync(path.join(root, 'installation.json'))) return fail('HOST_NOT_INSTALLED');
             const session = randomBytes(16).toString('hex');
             record = { version: VERSION, instanceId: msg.instanceId, session, token: randomBytes(32).toString('hex'), pipe: `\\\\.\\pipe\\jtcrpa-mcp-${session}`, pid: process.pid };
+            record.caller = caller;
             const file = instanceFile(record.instanceId);
             try {
                 if (fs.existsSync(file)) {
@@ -65,7 +71,14 @@ export async function runNativeHost() {
                 try {
                     if (Buffer.byteLength(line) > MAX_BYTES) return fail('MESSAGE_TOO_LARGE');
                     const value = JSON.parse(line) as { ready?: boolean; clientId: number; request: { token?: string; method?: string; params?: unknown } };
-                    if (value.ready) { clearTimeout(startupTimer); send({ type: 'connected', version: VERSION, instanceId: record!.instanceId }); return; }
+                    if (value.ready) {
+                        clearTimeout(startupTimer);
+                        const instanceId = record!.instanceId;
+                        void rememberInstance(caller, instanceId).then(() => {
+                            if (!closed) send({ type: 'connected', version: VERSION, instanceId });
+                        }).catch(error => { if (!closed) fail(error.message); });
+                        return;
+                    }
                     const supplied = Buffer.from(value.request.token ?? '');
                     const expected = Buffer.from(record!.token);
                     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) { respond(value.clientId, { ok: false, error: 'UNAUTHORIZED' }); return; }
