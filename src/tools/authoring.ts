@@ -75,6 +75,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
         description:
             '通过 commitWorkflow 校验并保存工作流。成功后说明保存结果及 warnings，询问用户是否现在执行，并等待本次保存之后的明确确认；不得自动调用 workflow_run。' +
             'workflow 包含 name、完整 steps，以及可选的 description、guide、sourceUrl、category、tags、workflowId。' +
+            '修改已有步骤时先核对功能简述和使用方法，确认后在 workflow 中传 metadataReviewed: true。' +
             '先获取节点 Schema。沿用现有新增或更新语义，请检查返回的 updated 和 workflowId。' +
             '仅对相同参数复用 requestId；超时后先调用 connection_status(requestId) 查询，' +
             '不得盲目更换请求编号重试。',

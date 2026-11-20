@@ -1,6 +1,6 @@
 # 九头虫 MCP 本机桥接器（jtcrpa-mcp）
 
-本仓库维护 npm 包 `jtcrpa-mcp`，通过 Native Messaging 连接九头虫浏览器插件，并向 Codex 等 MCP 客户端提供工作流编排、执行和数据集读取能力。运行需要 Node.js 24+、Windows PowerShell 5.1 和已安装的九头虫插件。
+本仓库维护 npm 包 `jtcrpa-mcp`，通过 Native Messaging 连接九头虫浏览器插件，并向 Codex 等 MCP 客户端提供工作流编排、执行和数据集读取能力。运行需要 Node.js 20.19.0 或更高版本、Windows PowerShell 5.1 和已安装的九头虫插件。新安装建议选择仍受官方维护的 Node.js LTS。
 
 插件代码在 `agent-jtcrpa-com` 仓库。插件与桥接器独立打包和发布，通过本机通信协议配合。一起检出时，插件仓库位于 `../agent-jtcrpa-com`。
 

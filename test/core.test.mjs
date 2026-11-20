@@ -7,9 +7,9 @@ import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { nativeFrame, nativeDecoder, MAX_BYTES } from '../src/protocol.ts';
-import { callExtension } from '../src/ipc.ts';
-import { instanceFile } from '../src/paths.ts';
+import { nativeFrame, nativeDecoder, MAX_BYTES } from '../dist/protocol.js';
+import { callExtension } from '../dist/ipc.js';
+import { instanceFile } from '../dist/paths.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 test('Native Messaging handles split UTF-8 frames and rejects invalid sizes', () => {
@@ -51,7 +51,7 @@ test('real protected pipe routes concurrent requests and cleans discovery on EOF
     try {
         child.stdin.write(nativeFrame({ type: 'hello', version: 1, instanceId: id }));
         await ready;
-        const { listConnections } = await import('../src/connections.ts');
+        const { listConnections } = await import('../dist/connections.js');
         const [connected] = listConnections().connections;
         assert.deepEqual(connected.candidates, [{ instanceId: id, online: true }]);
         assert.equal((await callExtension({ bindingId }, 'connection_ping', { text: '稳定绑定' })).text, '稳定绑定');

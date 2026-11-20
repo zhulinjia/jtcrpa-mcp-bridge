@@ -3,7 +3,7 @@
   "version": "0.4.1",
   "type": "module",
   "description": "Windows Native Messaging bridge for the Jiutouchong browser extension",
-  "engines": { "node": ">=24.0.0" },
+  "engines": { "node": ">=20.19.0" },
   "os": ["win32"],
   "bin": { "jtcrpa-mcp": "bin/cli.mjs" },
   "files": ["bin", "dist", "windows", "README.md"],
@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepack": "npm run build",
     "pretest": "npm run build",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test",
     "check": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": { "@modelcontextprotocol/server": "2.4.0", "zod": "4.4.3" },

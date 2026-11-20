@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { datasetTools } from '../src/tools/datasets.ts';
+import { datasetTools } from '../dist/tools/datasets.js';
 
 const readSchema = datasetTools.find((tool) => tool.name === 'dataset_read').schema;
 
