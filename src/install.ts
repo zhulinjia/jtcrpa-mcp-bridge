@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { bridgeRoot, listRunningHosts } from './paths.ts';
 import { HOST, validInstance } from './protocol.ts';
+import { defaultChromeDataDir, resolveChromeDataDir } from './mac-chrome.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { replaceFile } from './registration-files.ts';
 import { checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
@@ -29,10 +30,12 @@ interface InstallationRecord {
     kinds: BrowserKind[];
     node?: string;
     cli?: string;
+    chromeDataDirs?: string[];
 }
 
 interface InstallationBackup {
     files: Map<string, Buffer | undefined>;
+    chromeDataDir?: string;
     registrations: Map<BrowserKind, string | undefined>;
 }
 
@@ -59,17 +62,17 @@ export async function manageHostRegistration(command: 'add' | 'uninstall', args:
     await withRegistrationLock(() => {
         if (command === 'uninstall') uninstallNativeHost(paths);
         else {
-            const { targets, instanceId } = parseBrowserTargets(args);
-            addNativeHost(paths, targets, instanceId);
+            const { targets, instanceId, chromeDataDir } = parseBrowserTargets(args);
+            addNativeHost(paths, targets, instanceId, chromeDataDir);
         }
     });
 }
 
-function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], instanceId?: string): void {
+function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], instanceId?: string, chromeDataDir?: string): void {
     if (process.platform === 'win32' && /["%\r\n]/.test(cli + process.execPath + paths.root)) throw new Error('Unsupported character in installation path');
-    const backup = captureInstallationBackup(paths, targets);
+    const backup = captureInstallationBackup(paths, targets, chromeDataDir);
     const previous = fs.existsSync(paths.record) ? readInstallationRecord(paths.record) : { kinds: [] };
-    const files = sharedInstallationFiles(paths, previous, targets);
+    const files = sharedInstallationFiles(paths, previous, targets, chromeDataDir);
     const store = readConnections();
     const register = new Map<BrowserKind, string>();
     for (const target of targets) {
@@ -96,11 +99,18 @@ export async function removeConnection(expected: Connection): Promise<void> {
         ensureCanRemove(before, revoke);
         if (revoke) store.observed = store.observed.filter(item => !sameExtension(before, item));
         const paths = installationPaths();
-        const backup = captureInstallationBackup(paths, revoke ? [before] : []);
+        const backup = captureInstallationBackup(paths, []);
         const files = new Map([[connectionFile(), JSON.stringify(store)]]);
         if (revoke) {
             const manifest = manifestPath(paths, before.kind);
-            if (!backup.registrations.get(before.kind)) throw new Error('本机宿主登记缺失，请重新运行 add。');
+            const installation = readInstallationRecord(paths.record);
+            const locations = registeredDataDirs(installation, before.kind);
+            // Temporary development roots may have disappeared since registration.
+            const remaining = locations.filter(dir => dir === undefined || fs.existsSync(dir));
+            if (remaining.length && !remaining.some(dir => readHostRegistration(before.kind, dir) === manifest)) {
+                throw new Error('本机宿主登记缺失，请重新运行 add。');
+            }
+            backup.files.set(manifest, fs.readFileSync(manifest));
             files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, before, backup.files.get(manifest), 'remove'), null, 2));
         }
         commitRegistration(paths, backup, files, new Map());
@@ -126,11 +136,11 @@ function commitRegistration(paths: InstallationPaths, backup: InstallationBackup
             updatedFiles.push(file);
         }
         for (const [kind, manifest] of register) {
-            registerHost(kind, manifest);
+            registerHost(kind, manifest, backup.chromeDataDir);
             updatedRegistry.push(kind);
         }
     } catch (error) {
-        for (const kind of updatedRegistry) restoreHostRegistration(kind, backup.registrations.get(kind), manifestPath(paths, kind));
+        for (const kind of updatedRegistry) restoreHostRegistration(kind, backup.registrations.get(kind), manifestPath(paths, kind), backup.chromeDataDir);
         for (const file of updatedFiles) {
             const contents = backup.files.get(file);
             if (contents) replaceFile(file, contents, file === paths.launcher ? 0o700 : 0o600);
@@ -148,7 +158,9 @@ function uninstallNativeHost(paths: InstallationPaths): void {
     const installation = readInstallationRecord(paths.record);
     for (const kind of installation.kinds) {
         const manifest = manifestPath(paths, kind);
-        if (readHostRegistration(kind) === manifest) unregisterHost(kind);
+        for (const directory of registeredDataDirs(installation, kind)) {
+            if (readHostRegistration(kind, directory) === manifest) unregisterHost(kind, directory);
+        }
         removeFileIfPresent(manifest);
     }
     fs.unlinkSync(paths.record);
@@ -159,7 +171,7 @@ function uninstallNativeHost(paths: InstallationPaths): void {
 
 function parseBrowserTargets(args: string[]) {
     const { values } = parseArgs({ args, options: {
-        'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' }, instance: { type: 'string' },
+        'chrome-user-data-dir': { type: 'string' }, 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' }, instance: { type: 'string' },
     } });
     const chrome = values['chrome-id'];
     const firefox = values['firefox-id'];
@@ -171,7 +183,12 @@ function parseBrowserTargets(args: string[]) {
     if (chrome) targets.push({ kind: 'chrome', extensionId: chrome });
     if (firefox) targets.push({ kind: 'firefox', extensionId: firefox });
     if (values.instance !== undefined && (!validInstance(values.instance) || targets.length !== 1)) throw new Error('Specify one browser and a valid instance UUID.');
-    return { targets, instanceId: values.instance };
+    const explicit = values['chrome-user-data-dir'];
+    if (explicit !== undefined && (!chrome || process.platform !== 'darwin')) {
+        throw new Error('--chrome-user-data-dir 仅适用于 macOS 上的 --chrome-id。');
+    }
+    const chromeDataDir = chrome && process.platform === 'darwin' ? resolveChromeDataDir(chrome, explicit) : undefined;
+    return { targets, instanceId: values.instance, chromeDataDir };
 }
 
 function prepareInstallationDirectory(root: string): void {
@@ -200,7 +217,7 @@ function manifestPath(paths: InstallationPaths, kind: BrowserKind): string {
     return path.join(paths.root, `${kind}.json`);
 }
 
-function captureInstallationBackup(paths: InstallationPaths, targets: BrowserTarget[]): InstallationBackup {
+function captureInstallationBackup(paths: InstallationPaths, targets: BrowserTarget[], chromeDataDir?: string): InstallationBackup {
     const manifestFiles = targets.map((target) => manifestPath(paths, target.kind));
     const files = new Map<string, Buffer | undefined>();
     for (const file of [paths.launcher, paths.record, connectionFile(), ...manifestFiles]) {
@@ -209,16 +226,23 @@ function captureInstallationBackup(paths: InstallationPaths, targets: BrowserTar
 
     const registrations = new Map<BrowserKind, string | undefined>();
     for (const { kind } of targets) {
-        const manifest = readHostRegistration(kind);
+        const manifest = readHostRegistration(kind, chromeDataDir);
         if (manifest && manifest !== manifestPath(paths, kind)) {
             throw new Error(`A different ${kind} host is registered; refusing to overwrite it.`);
         }
         registrations.set(kind, manifest);
     }
-    return { files, registrations };
+    return { files, registrations, chromeDataDir };
 }
 
-function sharedInstallationFiles(paths: InstallationPaths, previous: InstallationRecord, targets: BrowserTarget[]): Map<string, string> {
+function registeredDataDirs(installation: InstallationRecord, kind: BrowserKind): (string | undefined)[] {
+    if (process.platform === 'darwin' && kind === 'chrome') {
+        return installation.chromeDataDirs ?? [defaultChromeDataDir()];
+    }
+    return [undefined];
+}
+
+function sharedInstallationFiles(paths: InstallationPaths, previous: InstallationRecord, targets: BrowserTarget[], chromeDataDir?: string): Map<string, string> {
     // 批处理文件按 UTF-8 写入，先切换代码页再读取含中文的 Node / CLI 路径。
     const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
     const launcher = process.platform === 'darwin'
@@ -230,6 +254,10 @@ function sharedInstallationFiles(paths: InstallationPaths, previous: Installatio
         node: process.execPath,
         cli,
     };
+    if (process.platform === 'darwin' && record.kinds.includes('chrome')) {
+        const dirs = previous.chromeDataDirs ?? (previous.kinds.includes('chrome') ? [defaultChromeDataDir()] : []);
+        record.chromeDataDirs = [...new Set(chromeDataDir ? [...dirs, chromeDataDir] : dirs)];
+    }
     return new Map([[paths.launcher, launcher], [paths.record, JSON.stringify(record)]]);
 }
 

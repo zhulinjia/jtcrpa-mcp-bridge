@@ -34,6 +34,7 @@ function isolatedInstallation(t, { failRegistry, failDirectory } = {}) {
     const previousHome = process.env.JTCRPA_BRIDGE_HOME;
     process.env.JTCRPA_BRIDGE_HOME = root;
     const registry = new Map();
+    const chromeProcesses = [];
     const commands = [];
     const messages = [];
     t.mock.method(console, 'log', (message) => messages.push(message));
@@ -45,6 +46,8 @@ function isolatedInstallation(t, { failRegistry, failDirectory } = {}) {
         return Buffer.alloc(0);
     });
     t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+        if (mac && command === '/usr/bin/pgrep') return { status: chromeProcesses.length ? 0 : 1, stdout: '123' };
+        if (mac && command === '/bin/ps') return { status: 0, stdout: chromeProcesses.join('\n') };
         assert.equal(options.windowsHide, true);
         if (command === 'powershell.exe') {
             assert.ok(args[args.indexOf('-File') + 1].endsWith('read-registration.ps1'));
@@ -77,7 +80,7 @@ function isolatedInstallation(t, { failRegistry, failDirectory } = {}) {
         fs.rmSync(resolved, { recursive: true, force: true });
     });
     return {
-        root, registry, commands, messages,
+        root, registry, commands, messages, chromeProcesses,
         file: (name) => path.join(root, name),
         read: (name) => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8')),
     };
@@ -153,7 +156,8 @@ test('add writes exact launcher and browser-specific manifests, then uninstall r
         }
         for (const name of [launcherName, 'instances']) assert.equal(fs.statSync(fixture.file(name)).mode & 0o777, 0o700);
     } else assert.equal(fs.readFileSync(fixture.file('host.cmd'), 'utf8'), `@echo off\r\nchcp 65001 >nul\r\n"${process.execPath}" "${cli}" native-host "%~1" "%~2"\r\n`);
-    assert.deepEqual(fixture.read('installation.json'), { kinds: ['chrome', 'firefox'], node: process.execPath, cli });
+    assert.deepEqual(fixture.read('installation.json'), { kinds: ['chrome', 'firefox'], node: process.execPath, cli,
+        ...(mac ? { chromeDataDirs: [path.join(os.homedir(), 'Library/Application Support/Google/Chrome')] } : {}) });
     const common = { name: HOST, description: 'Jiutouchong MCP bridge', path: fixture.file(launcherName), type: 'stdio' };
     assert.deepEqual(fixture.read('chrome.json'), { ...common, allowed_origins: [`chrome-extension://${chromeId}/`] });
     assert.deepEqual(fixture.read('firefox.json'), { ...common, allowed_extensions: [firefoxId] });
@@ -461,4 +465,53 @@ test('macOS registration rolls back a partial install and preserves foreign mani
     await manageHostRegistration('uninstall', []);
     assert.equal(fs.readlinkSync(chrome), fixture.file('missing-foreign.json'));
     assert.equal(fs.lstatSync(firefox, { throwIfNoEntry: false }), undefined);
+});
+
+test('macOS registers the running Chrome root containing the extension and remembers it offline', { skip: !mac }, async t => {
+    const fixture = isolatedInstallation(t);
+    const executable = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const hostFile = root => path.join(root, 'NativeMessagingHosts', HOST + '.json');
+    const dev = fixture.file('profile with spaces');
+    const other = fixture.file('other profile');
+    const prefs = path.join('Profile 2', 'Secure Preferences');
+    for (const [root, id] of [[other, 'b'.repeat(32)], [dev, chromeId]]) {
+        fs.mkdirSync(path.join(root, 'Profile 2'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'Local State'), '{}');
+        fs.writeFileSync(path.join(root, prefs), JSON.stringify({ extensions: { settings: { [id]: {} } } }));
+        fixture.chromeProcesses.push(executable + ' --user-data-dir=' + root + ' --no-first-run');
+    }
+    const expected = fixture.file('chrome.json');
+    await manageHostRegistration('add', ['--chrome-id', chromeId]);
+    assert.equal(fs.readlinkSync(hostFile(dev)), expected);
+    assert.equal(fs.existsSync(hostFile(other)), false);
+    assert.equal(fs.existsSync(hostFile(path.join(os.homedir(), 'Library/Application Support/Google/Chrome'))), false);
+    fs.copyFileSync(path.join(dev, prefs), path.join(other, prefs));
+    await assert.rejects(manageHostRegistration('add', ['--chrome-id', chromeId]), /多个运行中的 Chrome/);
+    await manageHostRegistration('add', ['--chrome-id', chromeId, '--chrome-user-data-dir', other]);
+    assert.equal(fs.readlinkSync(hostFile(other)), expected);
+    fixture.chromeProcesses.length = 0;
+    await removeConnection(listConnections().connections[0]);
+    assert.deepEqual(fixture.read('chrome.json').allowed_origins, []);
+    await manageHostRegistration('uninstall', []);
+    for (const root of [dev, other]) assert.equal(fs.lstatSync(hostFile(root), { throwIfNoEntry: false }), undefined);
+});
+
+test('macOS retains a legacy default registration when adding a temporary Chrome root', { skip: !mac }, async t => {
+    const fixture = isolatedInstallation(t);
+    await manageHostRegistration('add', ['--chrome-id', chromeId]);
+    const legacy = fixture.read('installation.json');
+    delete legacy.chromeDataDirs;
+    fs.writeFileSync(fixture.file('installation.json'), JSON.stringify(legacy));
+    const dev = fixture.file('development');
+    fs.mkdirSync(dev);
+    fs.writeFileSync(path.join(dev, 'Local State'), '{}');
+    await manageHostRegistration('add', ['--chrome-id', chromeId, '--chrome-user-data-dir', dev]);
+    const defaultDir = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
+    assert.deepEqual(fixture.read('installation.json').chromeDataDirs, [defaultDir, fs.realpathSync(dev)]);
+
+    // The dev launcher removes its user data root; uninstall still owns the default link.
+    fs.rmSync(dev, { recursive: true });
+    await manageHostRegistration('uninstall', []);
+    assert.equal(fs.lstatSync(path.join(defaultDir, 'NativeMessagingHosts', HOST + '.json'), { throwIfNoEntry: false }), undefined);
+    assert.equal(fs.existsSync(dev), false);
 });

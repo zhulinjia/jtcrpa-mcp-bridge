@@ -33,7 +33,7 @@ async function waitForBrowser(target: BrowserTarget, instanceId: string, ticket:
 }
 
 export async function connectCodex(args: string[]) {
-    const { values } = parseArgs({ args, options: { 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' },
+    const { values } = parseArgs({ args, options: { 'chrome-user-data-dir': { type: 'string' }, 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' },
         instance: { type: 'string' }, setup: { type: 'string' } } });
     const chrome = values['chrome-id'], firefox = values['firefox-id'];
     const { instance: instanceId, setup: ticket } = values;
@@ -42,7 +42,10 @@ export async function connectCodex(args: string[]) {
     }
     const target: BrowserTarget = chrome ? { kind: 'chrome', extensionId: chrome } : { kind: 'firefox', extensionId: firefox! };
     checkExtensionId(target.kind, target.extensionId);
-    await manageHostRegistration('add', ['--' + target.kind + '-id', target.extensionId]);
+    const registration = ['--' + target.kind + '-id', target.extensionId];
+    const directory = values['chrome-user-data-dir'];
+    if (directory !== undefined) registration.push('--chrome-user-data-dir', directory);
+    await manageHostRegistration('add', registration);
     console.log('正在等待发起接入的浏览器…');
     const setup = await bindCodexBrowser(target, instanceId, ticket);
     console.log(setup.displayName + ' 已就绪。Codex MCP 服务名为 ' + setup.name);

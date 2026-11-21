@@ -10,6 +10,8 @@
 
 Codex CLI 用户在目标浏览器的扩展页开启 **MCP 连接** 并允许本机通信，再运行 **Codex** 面板显示的首次接入命令。命令包含当前扩展和实例的信息，会自动完成注册。
 
+macOS 上，桥接器会按扩展 ID 查找正在运行的 Google Chrome，识别开发工具通过 `--user-data-dir` 启动的实例。多个运行目录中装有同一扩展时，可在 `add` 或 `connect-codex` 命令末尾加 `--chrome-user-data-dir "/绝对路径/用户数据目录"`。使用含 `Local State` 的根目录，通常是 `chrome://version` 显示的「个人资料路径」的上一级。开发工具重新创建临时目录后，从新实例再次运行接入命令。
+
 使用 Claude Code 或 DeepSeek Harness 时，在所选客户端面板复制浏览器注册和配置命令。Windows PowerShell 与 macOS 终端会看到对应的命令。
 
 | 你用哪个客户端 | 第一次接入怎么做 | 怎么知道已接通 |
@@ -117,6 +119,8 @@ npm uninstall --global jtcrpa-mcp
 For the Codex CLI, turn on **MCP connection** in the target browser, allow native messaging and run the command shown under **Codex**. It includes the extension and instance identifiers and handles registration.
 
 For Claude Code or DeepSeek Harness, use the browser registration and client configuration commands from the selected client panel. The page provides the commands for your operating system.
+
+On macOS, the bridge looks for the extension ID in running Google Chrome instances, including development sessions launched with `--user-data-dir`. If several data directories contain the extension, append `--chrome-user-data-dir "/absolute/path/to/user data"` to `add` or `connect-codex`. Use the directory containing `Local State`, usually the parent of the Profile Path in `chrome://version`. Run setup again when the development tool creates a new temporary data directory.
 
 | Client | What to do the first time | How to check |
 | --- | --- | --- |

@@ -3,13 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { defaultChromeDataDir } from './mac-chrome.ts';
 import { HOST } from './protocol.ts';
 
 export type BrowserKind = 'chrome' | 'firefox';
 
-function macRegistration(kind: BrowserKind): string {
-    const vendor = kind === 'chrome' ? 'Google/Chrome' : 'Mozilla';
-    return path.join(os.homedir(), 'Library/Application Support', vendor, 'NativeMessagingHosts', HOST + '.json');
+function macRegistration(kind: BrowserKind, chromeDataDir?: string): string {
+    const root = kind === 'chrome' ? chromeDataDir ?? defaultChromeDataDir() : path.join(os.homedir(), 'Library/Application Support/Mozilla');
+    return path.join(root, 'NativeMessagingHosts', HOST + '.json');
 }
 
 function registryKey(kind: BrowserKind): string {
@@ -21,9 +22,9 @@ function runRegistryCommand(args: string[]) {
     return spawnSync('reg.exe', args, { encoding: 'utf8', windowsHide: true });
 }
 
-export function readHostRegistration(kind: BrowserKind): string | undefined {
+export function readHostRegistration(kind: BrowserKind, chromeDataDir?: string): string | undefined {
     if (process.platform === 'darwin') {
-        const file = macRegistration(kind);
+        const file = macRegistration(kind, chromeDataDir);
         try {
             return path.resolve(path.dirname(file), fs.readlinkSync(file));
         } catch (error) {
@@ -44,9 +45,9 @@ export function readHostRegistration(kind: BrowserKind): string | undefined {
     return typeof value === 'string' ? value : undefined;
 }
 
-export function registerHost(kind: BrowserKind, manifest: string): void {
+export function registerHost(kind: BrowserKind, manifest: string, chromeDataDir?: string): void {
     if (process.platform === 'darwin') {
-        const file = macRegistration(kind);
+        const file = macRegistration(kind, chromeDataDir);
         fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
         fs.symlinkSync(manifest, file);
         return;
@@ -57,18 +58,18 @@ export function registerHost(kind: BrowserKind, manifest: string): void {
     if (result.status !== 0) throw new Error(`Host registration failed: ${result.stderr}`);
 }
 
-export function unregisterHost(kind: BrowserKind): void {
+export function unregisterHost(kind: BrowserKind, chromeDataDir?: string): void {
     if (process.platform === 'darwin') {
-        fs.unlinkSync(macRegistration(kind));
+        fs.unlinkSync(macRegistration(kind, chromeDataDir));
         return;
     }
     const result = runRegistryCommand(['delete', registryKey(kind), '/f']);
     if (result.status !== 0) throw new Error(result.stderr || 'Registry removal failed');
 }
 
-export function restoreHostRegistration(kind: BrowserKind, previousPath: string | undefined, manifest: string): void {
+export function restoreHostRegistration(kind: BrowserKind, previousPath: string | undefined, manifest: string, chromeDataDir?: string): void {
     if (process.platform === 'darwin') {
-        if (readHostRegistration(kind) === manifest) unregisterHost(kind);
+        if (readHostRegistration(kind, chromeDataDir) === manifest) unregisterHost(kind, chromeDataDir);
         return;
     }
     // 沿用既有尽力恢复策略，不将恢复命令失败改为新的异常。
