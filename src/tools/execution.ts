@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { ForwardedToolDefinition } from './definition.ts';
+import { pageTargetFields, type ForwardedToolDefinition } from './definition.ts';
 
 export const executionTools: ForwardedToolDefinition[] = [
     {
@@ -14,7 +14,7 @@ export const executionTools: ForwardedToolDefinition[] = [
         schema: z.object({
             requestId: z.uuid(),
             workflowId: z.number().int().positive(),
-            tabId: z.number().int().positive(),
+            ...pageTargetFields,
         }),
         readOnly: false,
         openWorld: true,

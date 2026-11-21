@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod/v4';
 import { callExtension, type McpTarget } from '../ipc.ts';
-import { findBinding } from '../connections.ts';
+import { connectionName, findBinding } from '../connections.ts';
 
 // 连接状态和回声测试的离线返回不同，保留各自的处理语义。
 export function registerConnectionTools(server: McpServer, target: McpTarget) {
@@ -15,9 +15,13 @@ export function registerConnectionTools(server: McpServer, target: McpTarget) {
         let result: unknown;
         try {
             result = await callExtension(target, 'connection_status', params);
+            if (typeof target !== 'string' && target.expectedInstanceId && result && typeof result === 'object') {
+                const binding = findBinding(target.bindingId);
+                if (binding?.instanceId === target.expectedInstanceId) result = { ...result, connectionId: binding.id, browserName: connectionName(binding) };
+            }
         } catch (error) {
             const binding = typeof target === 'string' ? undefined : findBinding(target.bindingId);
-            result = { connected: false, instanceId: typeof target === 'string' ? target : binding?.instanceId ?? null,
+            result = { connected: false, instanceId: typeof target === 'string' ? target : target.expectedInstanceId ?? binding?.instanceId ?? null,
                 connectionId: binding?.id, error: (error as Error).message };
         }
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };

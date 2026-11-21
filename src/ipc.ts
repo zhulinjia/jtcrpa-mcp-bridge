@@ -4,18 +4,22 @@ import { MAX_BYTES } from './protocol.ts';
 import { findBinding } from './connections.ts';
 import { sameExtension } from './browser-identity.ts';
 
-export type McpTarget = string | { bindingId: string };
+export type McpTarget = string | { bindingId: string; expectedInstanceId?: string; reportCodexAccess?: boolean };
 
 export function callExtension(target: McpTarget, method: string, params: unknown = {}, timeoutMs = 50000): Promise<unknown> {
     return new Promise((resolve, reject) => {
         const connection = typeof target === 'string' ? undefined : findBinding(target.bindingId);
         if (typeof target !== 'string' && !connection) throw new Error('CONNECTION_REMOVED');
+        const expectedInstanceId = typeof target === 'string' ? undefined : target.expectedInstanceId;
+        if (expectedInstanceId && connection?.instanceId !== expectedInstanceId) throw new Error('CONNECTION_INSTANCE_MISMATCH');
         const instanceId = typeof target === 'string' ? target : connection?.instanceId;
         if (!instanceId) throw new Error('CONNECTION_INSTANCE_NOT_SELECTED');
         let record: ReturnType<typeof readDiscovery>;
         try { record = readDiscovery(instanceId); } catch { reject(new Error('BROWSER_OFFLINE')); return; }
         if (connection && !sameExtension(connection, record.caller)) throw new Error('CONNECTION_INSTANCE_MISMATCH');
-        const request = JSON.stringify({ token: record.token, method, params }) + '\n';
+        const request = JSON.stringify({ token: record.token, method, params,
+            expectedInstanceId, codexBinding: expectedInstanceId ? connection?.bindingId : undefined,
+            codexAccess: typeof target !== 'string' && target.reportCodexAccess || undefined }) + '\n';
         if (Buffer.byteLength(request) > MAX_BYTES - 1024) { reject(new Error('MESSAGE_TOO_LARGE')); return; }
         const socket = net.createConnection(record.pipe);
         let result: Buffer = Buffer.alloc(0);
@@ -32,7 +36,8 @@ export function callExtension(target: McpTarget, method: string, params: unknown
             } catch (error) { reject(error); }
             socket.destroy();
         });
-        socket.on('error', reject);
+        socket.on('error', (error: NodeJS.ErrnoException) =>
+            reject(error.code === 'ENOENT' || error.code === 'ECONNREFUSED' ? new Error('BROWSER_OFFLINE') : error));
         socket.on('end', () => { if (!result.includes(10)) reject(new Error('BRIDGE_CLOSED')); });
         socket.on('close', () => clearTimeout(timer));
     });

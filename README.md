@@ -20,24 +20,24 @@
    jtcrpa-mcp --version
    ```
 
-   要直接使用本仓库的 macOS 版本，在仓库根目录依次运行 `npm ci`、`npm run build` 和 `npm link`，再运行 `jtcrpa-mcp --version`。
+   此 Codex CLI 流程需要支持浏览器实例绑定的扩展和 0.5.1 或更高版本的桥接器。开发测试可在本仓库运行 `npm run build` 后使用 `npm pack` 生成的本地安装包。
 
-3. **登记当前浏览器。** 在扩展的 **MCP 连接 → 注册当前浏览器** 复制命令。macOS 使用 `jtcrpa-mcp add --chrome-id '扩展ID'`，Firefox 使用 `--firefox-id`。把引号里的内容换成页面给出的完整扩展 ID。如果复制的命令以 `jtcrpa-mcp.cmd` 开头，在 Mac 终端改为 `jtcrpa-mcp`。执行后回到扩展打开 **开启 MCP 连接**，按提示允许本机通信，等到显示 **浏览器与本机程序已连接**。
-4. **接入 Codex。** 在 macOS 终端运行 `jtcrpa-mcp config --instance '实例UUID' --client codex`，使用同一页面显示的实例 UUID。将输出的 `[mcp_servers.jtcrpa]` 配置加入 `~/.codex/config.toml`，已有同名配置时更新该段。Windows 可直接在 PowerShell 运行扩展的 **接入外部 AI → Codex → 复制 Codex 接入命令**。运行 `codex mcp list` 确认出现 `jtcrpa`，然后打开新的 Codex 会话。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code 或 DeepSeek Harness](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/usage.md#客户端配置)
+3. **连接你要用的浏览器。** 在该浏览器的 **MCP 连接** 页面打开 **开启 MCP 连接** 开关，按提示允许本机通信，然后选择 **Codex** 查看首次接入命令。
+4. **登记 MCP 服务。** 将页面给出的整条命令粘贴到终端运行。命令核对目标浏览器后，显示浏览器名称和 MCP 服务名，然后退出。Codex 加载这项配置后，你可以在自己的对话里提出任务。首次访问后，扩展会显示访问时间。要使用另一份浏览器配置，从那份配置的扩展页接入。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code 或 DeepSeek Harness](docs/usage.md#客户端配置)
 
 ### 第一次用 MCP 采集书名和价格
 
-**① 打开网页，确认连到了它。** 用刚才连接的浏览器打开书店首页。如果页面显示英文，点页头的 **简体中文**。然后在 **Codex 聊天框**发送第一条消息。[打开书店练习场](https://doc.jtcrpa.com/practice/index.html)
+**① 读取网页。** 在已接入九头虫 MCP 的 AI 对话中发送下面的任务。九头虫会在已绑定的浏览器中打开或复用目标页，沿用该浏览器的登录状态。如果书店显示英文，可在页头切到 **简体中文**。
 
-> 用九头虫 MCP 检查连接，找到我打开的书店练习场标签页。告诉我页面标题，并从页面上读出第一本书的书名和价格。
+> 用九头虫打开 https://doc.jtcrpa.com/practice/index.html ，告诉我页面标题和第一本书的书名、价格。
 
-返回结果应能跟页面对上，第一本是《山海之间》，价格 ¥32.00。若找错页，先核对打开练习场的浏览器和配置，再继续。
+练习场首页的第一本书是《山海之间》，价格 ¥32.00。
 
 **② 保存一条可复用的规则。** 在同一个聊天里发送第二条消息。
 
 > 把书店当前列表页的每本书采成一行，书名列叫 title，价格列叫 price，保留货币符号，只采当前页。先在页面上试采，再把规则保存为工作流「Bookshop demo」，运行时写入数据集 bookshop_demo。告诉我保存的工作流编号，等我确认再运行。
 
-此时你应拿到 `workflowId`（工作流编号）。也可以在扩展的 **主工作台** 搜索 `Bookshop demo` 查看已保存的规则。
+此时你应拿到 `workflowId`（工作流编号）。也可以在扩展的 **主工作台** 搜索 `Bookshop demo` 查看已保存的规则。页面会保留，方便检查或试运行。需要关页时，可以自己关闭，也可以在对话里明确指定要关闭的页面。
 
 **③ 运行并核对数据。** 收到保存结果后，再单独发第三条消息。
 
@@ -74,24 +74,24 @@
    jtcrpa-mcp --version
    ```
 
-   To use the macOS version directly from this checkout, run `npm ci`, `npm run build` and `npm link` in the repository root. Check with `jtcrpa-mcp --version`.
+   This Codex CLI flow requires an extension that supports browser instance binding and bridge version 0.5.1 or later. To test a development checkout, run `npm run build` and install the local package produced by `npm pack`.
 
-3. **Register this browser.** Copy the command under **MCP connection → Register this browser**. On macOS, use `jtcrpa-mcp add --chrome-id 'extension-ID'` for Chrome or `--firefox-id` for Firefox. Replace the quoted value with the full extension ID from the page. If the copied command starts with `jtcrpa-mcp.cmd`, change it to `jtcrpa-mcp` in Terminal. Run it, turn on **Enable MCP connection**, grant native messaging permission if prompted and wait for **Browser connected to the local program**.
-4. **Connect Codex.** On macOS, run `jtcrpa-mcp config --instance 'instance-UUID' --client codex` using the instance UUID shown on that page. Add the generated `[mcp_servers.jtcrpa]` section to `~/.codex/config.toml`, replacing that section if it already exists. On Windows, run the extension’s **Connect an AI app → Codex → Copy Codex setup command** in PowerShell. Check that `codex mcp list` shows `jtcrpa`, then open a new Codex session. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code or DeepSeek Harness](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/usage.md#client-configuration)
+3. **Connect the browser you want to use.** In that profile, open **MCP connection**, turn on the connection switch and allow native messaging when prompted. Select **Codex** to see the first-time setup command.
+4. **Register the MCP server.** Run the setup command in your terminal. It verifies the target browser, prints its display name and MCP server name, then exits. Once Codex has loaded the configuration, enter your task in your own conversation. The extension shows the time of the first access. To use another profile, start from its extension page. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code or DeepSeek Harness](docs/usage.md#client-configuration)
 
 ### Collect your first four books
 
-**① Open the page and check the connection.** Open the bookshop homepage in the browser you just connected. If it appears in Chinese, click **English** in the page header. Send this first message in **Codex chat**. [Open the bookshop playground](https://doc.jtcrpa.com/en/practice/index.html)
+**① Read a page.** Send this task in an AI conversation connected to Jiutouchong MCP. The tool opens or reuses the page in the bound browser profile, using that profile’s sign-in state. If the bookshop appears in Chinese, select **English** in the page header.
 
-> Use Jiutouchong MCP to check the connection and find my open bookshop playground tab. Tell me the page title and read the first book’s title and price from the page.
+> Use Jiutouchong to open https://doc.jtcrpa.com/en/practice/index.html and tell me the page title and the first book’s title and price.
 
-You should see *Between Mountains and Seas* at ¥32.00. If the result is from a different page, check which browser profile has the bookshop open.
+The first book on the practice homepage is *Between Mountains and Seas* at ¥32.00.
 
 **② Save a reusable workflow.** Send this in the same chat.
 
 > Collect one row per book on the current listing page. Name the columns title and price and keep the currency symbol. Preview the extraction on the page, then save a workflow named “Bookshop demo” that writes to the bookshop_demo dataset when run. Give me the saved workflow ID and wait for my confirmation.
 
-You should receive a `workflowId`. To find the saved rule in the extension, open **Workbench** and search for `Bookshop demo`.
+You should receive a `workflowId`. To find the saved rule in the extension, open **Workbench** and search for `Bookshop demo`. The tab stays open for review or a trial run. Close it yourself or explicitly ask the assistant to close that specific page.
 
 **③ Run it and check the saved rows.** Once the client reports that it saved the workflow, send a separate message.
 

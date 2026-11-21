@@ -44,7 +44,7 @@ export async function acquireRegistrationLock() {
 export async function withRegistrationLock<T>(action: () => T): Promise<T> {
     const lock = await acquireRegistrationLock();
     try {
-        return action();
+        return await action();
     } finally {
         await new Promise<void>(resolve => lock.close(() => resolve()));
     }

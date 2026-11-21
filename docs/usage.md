@@ -8,13 +8,13 @@
 
 ### 客户端配置
 
-先在扩展的 **MCP 连接** 页面等到 **浏览器与本机程序已连接**。**注册当前浏览器** 的命令按浏览器使用 `add --chrome-id` 或 `add --firefox-id`，允许这个扩展和桥接器通信。**接入外部 AI** 生成的命令还包含这份浏览器配置的实例 ID。直接复制页面上的命令，两个 ID 都会自动带入各自的位置。
+Codex CLI 用户在目标浏览器的扩展页开启 **MCP 连接** 并允许本机通信，再运行 **Codex** 面板显示的首次接入命令。命令包含当前扩展和实例的信息，会自动完成注册。
 
-在 macOS「终端」中，可用 `jtcrpa-mcp config --instance '实例UUID' --client codex` 生成当前 Mac 的配置。将引号里的值换成扩展页面的实例 UUID，按所用客户端选择 `codex`、`claude` 或 `deepseek`。使用 Codex 时，将生成的服务段放入 `~/.codex/config.toml`。另外两个客户端使用下表中的配置位置。
+使用 Claude Code 或 DeepSeek Harness 时，在所选客户端面板复制浏览器注册和配置命令。Windows PowerShell 与 macOS 终端会看到对应的命令。
 
 | 你用哪个客户端 | 第一次接入怎么做 | 怎么知道已接通 |
 | --- | --- | --- |
-| Codex | 在扩展选 **Codex → 复制 Codex 接入命令**，整行粘贴到终端执行。它用 `codex mcp add jtcrpa` 登记当前浏览器。在终端运行 `codex mcp list`，然后打开新会话。 | 终端列表有 `jtcrpa`，在聊天中发送书店练习的第一条消息还能读到正确的书名和价格。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
+| Codex | 在终端运行扩展的 `connect-codex` 命令。登记完成后命令显示服务名并退出。Codex 加载配置后，在自己的对话中使用该服务。 | 扩展显示此浏览器已就绪，实际任务返回后显示 Codex 最近访问时间。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
 | Claude Code | 在扩展选 **Claude Code**，在终端执行复制的配置生成命令。在项目根目录新建 `.mcp.json` 时可粘贴完整输出。已有文件则把输出中的 `jtcrpa` 条目加到现有 `mcpServers` 对象。 | 在这个项目里重新打开 Claude Code，按提示允许该项目服务，输入 `/mcp` 查看 `jtcrpa`，然后发送同一条书店测试消息。[Claude Code MCP 文档](https://code.claude.com/docs/en/mcp) |
 | DeepSeek Harness | 在扩展选 **DeepSeek Harness**，在终端运行复制的命令。在 Harness Web 或 Desktop 的设置里添加 MCP 服务，名称填 `jtcrpa`，传输选 `stdio`，命令与参数逐项复制生成结果里 `config` 的 `command` 和 `args`。使用插件配置文件时，可直接把生成的 `mcp-jtcrpa` 条目加入插件列表。 | 用该配置重新启动 Harness，在对话里让它用 `mcp__jtcrpa__connection_ping` 原样返回 `bookshop`。[Harness 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [插件配置示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
 
@@ -26,13 +26,15 @@ Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试
 
 | 操作 | 客户端传给 MCP 的工具和参数 | 用什么判断成功 |
 | --- | --- | --- |
-| 1. 确认连接和页面 | `connection_status` 传 `{}`。`connection_ping` 传 `{"text":"bookshop"}`。`browser_context` 传 `{}`。 | `connected: true`，回声里的 `text` 为 `bookshop`。在 `tabs` 中找到书店网址，取这条记录的 `tabId`。 |
-| 2. 看页面，试采一行 | 调用 `workflow_contract`，传 `{"nodeTools":["emitExtractNode"],"probeTools":["snapshot","probeExtract"]}`。用上一步的 `tabId` 调用 `page_probe`，先用 `tool: "snapshot"`，然后用 `tool: "probeExtract"`，`params` 包含书籍卡片的 `selectors` 和两列的 `steps`。 | 快照包含书名。首页的 `totalMatched` 为 4，`sample` 只预览前 2 行的 `title` 和 `price`。 |
-| 3. 保存并核对规则 | `workflow_save` 传 `tabId`、新生成的 UUID `requestId` 和完整的 `workflow` 对象。可直接使用下方的书店规则。接着将返回的 `workflowId` 传给 `workflow_get`。 | 首次保存返回 `ok: true`、`updated: false` 和 `workflowId`。核对规则指向 `bookshop_demo`。`nextAction.type` 为 `confirm_execution`，此处等待用户单独确认。 |
-| 4. 启动并等到结束 | 用户确认后，`workflow_run` 传已保存的 `workflowId`、目标 `tabId` 和这次运行的新 UUID `requestId`。把返回的 `runId` 传给 `run_get`，可加 `logLimit: 3` 查看最近日志。 | `runId` 用于追踪这一次运行。等到 `run.status` 为 `SUCCESS`，本例的 `run.savedRows` 为 4。遇到 `FAILED` 可查看同一响应里的 `logs`。 |
+| 1. 打开目标网址 | 调用 `page_open`，传书店网址 `url` 和 UUID `requestId`。用户指定已有页时可用 `browser_context`。 | 从同一浏览器服务取得实际网址、`tabId` 和 `pageRef`。 |
+| 2. 看页面，试采一行 | 调用 `workflow_contract`，传 `{"nodeTools":["emitExtractNode"],"probeTools":["snapshot","probeExtract"]}`。用上一步的 `tabId` 和 `pageRef` 调用 `page_probe`，先用 `tool: "snapshot"`，然后用 `tool: "probeExtract"`，`params` 包含书籍卡片的 `selectors` 和两列的 `steps`。 | 快照包含书名。首页的 `totalMatched` 为 4，`sample` 只预览前 2 行的 `title` 和 `price`。 |
+| 3. 保存并核对规则 | `workflow_save` 传 `tabId`、`pageRef`、新生成的 UUID `requestId` 和完整的 `workflow` 对象。可直接使用下方的书店规则。接着将返回的 `workflowId` 传给 `workflow_get`。 | 首次保存返回 `ok: true`、`updated: false` 和 `workflowId`。核对规则指向 `bookshop_demo`。`nextAction.type` 为 `confirm_execution`，此处等待用户单独确认。 |
+| 4. 启动并等到结束 | 用户确认后，`workflow_run` 传已保存的 `workflowId`、目标 `tabId`、`pageRef` 和这次运行的新 UUID `requestId`。把返回的 `runId` 传给 `run_get`，可加 `logLimit: 3` 查看最近日志。 | `runId` 用于追踪这一次运行。等到 `run.status` 为 `SUCCESS`，本例的 `run.savedRows` 为 4。遇到 `FAILED` 可查看同一响应里的 `logs`。 |
 | 5. 读取真正落库的行 | `dataset_list` 传 `{"query":"bookshop_demo"}`。核对 `datasets` 里的 `datasetName`、`fields`、`rowsCount`。再用 `dataset_read` 传精确的 `datasetName` 或用查到的 `id` 作 `datasetId`。 | 首次运行且数据集原来为空时，`total` 为 4，`rows` 中有《山海之间》和 ¥32.00。 |
 
-示例文件是 `workflow_save` 的 **workflow 参数**。它包含可通过校验的完整步骤。要重现试采，取第一个节点的 `selectors` 和 `steps` 作为 `probeExtract` 的 `params`。标签页编号由 `browser_context` 提供，写请求的 UUID 由客户端生成。[查看完整书店规则 JSON](examples/bookshop-workflow.json)
+保存后标签页保留。用户明确要求关闭具体页面时，AI 才调用 `page_close`，传回该页的 `tabId`、`pageRef`、新的 `requestId` 和 `userRequested: true`。页面跳转后从同一服务重新取得引用。
+
+示例文件是 `workflow_save` 的 **workflow 参数**。它包含可通过校验的完整步骤。要重现试采，取第一个节点的 `selectors` 和 `steps` 作为 `probeExtract` 的 `params`。标签页编号和页面引用由 `page_open` 或 `browser_context` 提供，写请求的 UUID 由客户端生成。[查看完整书店规则 JSON](examples/bookshop-workflow.json)
 
 想核对自己客户端发出的请求时，可以从读取结果开始。下面是 MCP `tools/call` 的 `params`，在数据集已写入后即可使用。
 
@@ -61,17 +63,19 @@ Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试
 
 ### 管理多个浏览器配置
 
-直接使用扩展页面生成的接入命令时，客户端绑定该浏览器配置的实例 UUID。需要同时接入多个配置时，为每个实例设置不同的 MCP 服务名。要通过登记编号管理连接，可在终端运行以下命令。
+每份浏览器配置有自己的 MCP 服务名，例如 Chrome 连接 `c2` 对应 `jtcrpa_chrome_c2`。名称被占用时会追加 `_2`、`_3` 等编号。再次运行接入命令时，带八位绑定 ID 后缀的旧默认服务会换成短名，有自定义设置的服务保留原名。多份配置同时在线时，可以在任务里指明「Chrome c2」，各服务始终指向登记的浏览器。要按编号查看和管理连接，可在终端运行以下命令。
 
 ```sh
 jtcrpa-mcp list
 jtcrpa-mcp list --json
 ```
 
-如果列表显示「待选择实例」，确认目标浏览器已开启 MCP，然后执行列表给出的 `add ... --instance ...` 命令。相同扩展 ID 的多个浏览器配置可以分别选择。选定后，用实际编号替换下面示例中的 `c1`。
+Codex 用户看到「待选择实例」时，在目标浏览器开启 **MCP 连接**，运行 **Codex** 面板显示的接入命令。桥接器会自动选定该实例，即使有多个配置使用同一扩展 ID。
+
+手动管理旧配置或其他客户端时，可以运行列表给出的 `add ... --instance ...` 命令，再用实际登记编号生成配置。例如，为 Claude Code 导出 `c1` 的配置可以运行下面的命令。
 
 ```sh
-jtcrpa-mcp config --connection c1 --client codex
+jtcrpa-mcp config --connection c1 --client claude
 ```
 
 可选客户端为 `codex`、`claude`、`deepseek`，省略 `--client` 会输出三种配置。生成的启动参数包含登记的绑定 UUID。更换已选实例或扩展时，先添加新连接、更新客户端配置，再运行 `jtcrpa-mcp remove` 选择旧登记并确认。脚本可用 `jtcrpa-mcp remove c1` 直接删除指定登记。删除后，即使显示编号被复用，旧配置也会返回 `CONNECTION_REMOVED`。
@@ -81,16 +85,16 @@ jtcrpa-mcp config --connection c1 --client codex
 | 现象 | 处理 |
 | --- | --- |
 | 在侧边栏底部的设置菜单找不到「MCP 连接」 | 确认装的是九头虫 Agent。Chrome 和 Firefox 商店发布的 `2.0.2` 缺少此功能。如果已从官方取得支持 MCP 的 Chrome 压缩包，解压后在 `chrome://extensions` 打开「开发者模式」，点「加载已解压的扩展程序」并选择含 `manifest.json` 的目录。打开这份扩展的 MCP 页面，复制它自己的注册命令。[联系九头虫](https://jtcrpa.com/contact) |
-| `codex mcp list` 没有 `jtcrpa` | 从扩展的「接入外部 AI → Codex」重新复制完整命令，在准备运行 Codex 的同一用户账户下执行，再打开新会话。 |
-| 能收到回声却找不到书店标签页 | 在已连接的浏览器配置中新开书店网页，再让 AI 列出标签页。已在安装扩展前打开的书店页可以刷新一次。 |
+| 旧 Codex 对话仍连接另一份浏览器配置 | 先在目标浏览器完成接入。已有对话如果还没加载新的服务，可以在方便时重新打开 Codex，让它读取新配置。 |
+| 能收到回声却找不到书店标签页 | 把书店网址发给 AI，请它用九头虫的 `page_open` 打开。书店会在绑定的浏览器中打开。 |
 | 已有 `runId`，聊天里没有任何行 | 用 `run_get` 查本次状态和 `savedRows`。失败时看最近日志。成功但写入 0 行时，检查目标标签页及抽取节点的 `dataset_name`，并重新试采。已有写入却找不到列时，先让 AI 用 `dataset_list` 核对数据集名称和 `fields`。 |
 | 写入请求超时 | 把原 `requestId` 传给 `connection_status` 核对请求状态。启动请求还可用 `run_get` 按 `workflowId` 查最近运行，再决定是否重试。 |
 | PowerShell 提示「禁止运行脚本」（`.ps1`） | 把当前命令开头的 `npm` 换成 `npm.cmd`，或把 `jtcrpa-mcp` 换成 `jtcrpa-mcp.cmd`，参数照写。例如 `jtcrpa-mcp.cmd list`。 |
 | 终端找不到 `jtcrpa-mcp` | 运行 `npm prefix -g` 查看全局命令目录。macOS 的命令目录是该路径下的 `bin`。确认命令目录已加入 `PATH`，重新打开终端后用 `jtcrpa-mcp --version` 检查。 |
 | npm 镜像提示找不到刚发布的包 | 直接从官方源安装，运行 `npm install --global jtcrpa-mcp --registry=https://registry.npmjs.org`。 |
 | `Access to the specified native messaging host is forbidden` | 从当前扩展的 MCP 页面重新复制注册命令，对照 `list` 的完整扩展 ID，运行命令后重新开启 MCP。开发版扩展换 ID 后也要登记新 ID。 |
-| 「本机通信接口尚未就绪」或提示需要权限 | 在浏览器扩展管理页重新加载九头虫，返回 MCP 页面开启连接，按提示允许本机通信。 |
-| `BROWSER_OFFLINE` 或标签页属于另一个浏览器 | 打开目标浏览器配置并开启 MCP，核对页面的实例 UUID 与客户端配置。复制浏览器配置造成实例冲突时，使用扩展页面的「生成新实例 ID」并更新该客户端配置。 |
+| 首次授权后接口尚未就绪 | 等待正在运行或暂停的工作流结束，保存并关闭编辑页。扩展会自动重载一次。若仍提示手动重载，在扩展管理页重新加载。 |
+| `BROWSER_OFFLINE` 或绑定已变更 | 在目标浏览器开启 MCP。若本机宿主缺失，页面会显示重新登记的命令。若绑定已变更，请按上方「管理多个浏览器配置」更新客户端配置。 |
 | `CONNECTION_INSTANCE_NOT_SELECTED` 或 `CONNECTION_REMOVED` | 前者按 `list` 的提示选择实例。后者从现有登记重新生成客户端配置。 |
 
 ### 升级和卸载
@@ -110,13 +114,13 @@ npm uninstall --global jtcrpa-mcp
 
 ### Client configuration
 
-On the extension’s **MCP connection** page, wait for **Browser connected to the local program**. The **Register this browser** command uses `add --chrome-id` or `add --firefox-id` to let this extension communicate with the bridge. The client command under **Connect an AI app** includes the instance ID for this browser profile. Copy the commands from the page to use the right ID in each place.
+For the Codex CLI, turn on **MCP connection** in the target browser, allow native messaging and run the command shown under **Codex**. It includes the extension and instance identifiers and handles registration.
 
-In macOS Terminal, run `jtcrpa-mcp config --instance 'instance-UUID' --client codex` to generate a configuration with local paths. Substitute the instance UUID from the extension page and choose `codex`, `claude` or `deepseek` for your client. For Codex, add the generated server section to `~/.codex/config.toml`. For the other clients, use the configuration locations below.
+For Claude Code or DeepSeek Harness, use the browser registration and client configuration commands from the selected client panel. The page provides the commands for your operating system.
 
 | Client | What to do the first time | How to check |
 | --- | --- | --- |
-| Codex | In the extension, select **Codex → Copy Codex setup command**. Run the entire line in your terminal. It uses `codex mcp add jtcrpa` to register the current profile. Run `codex mcp list` and open a new session. | Check for `jtcrpa` in the terminal list, then send the first bookshop message in chat and verify the title and price. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
+| Codex | Run the extension’s `connect-codex` command. It prints the registered server name and exits. Use that server in your own conversation once Codex loads the configuration. | The extension shows readiness and the time of the last real Codex access. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
 | Claude Code | Select **Claude Code** in the extension and run its configuration command in your terminal. If your project has no `.mcp.json`, create one in its root and paste the full output. For an existing file, add the `jtcrpa` entry to its `mcpServers` object. | Reopen Claude Code in that project, approve the project server if prompted, enter `/mcp` and look for `jtcrpa`. Try the same bookshop message. [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) |
 | DeepSeek Harness | Select **DeepSeek Harness** and run the copied command in your terminal. In Harness Web or Desktop Settings, add an MCP server named `jtcrpa`, select `stdio`, and copy `command` and each item in `args` from the generated `config`. For a plugin-based profile, add the generated `mcp-jtcrpa` entry to its plugin list. | Restart Harness with this configuration. Ask it to use `mcp__jtcrpa__connection_ping` to echo `bookshop`. [Harness settings](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [Plugin configuration example](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
 
@@ -128,13 +132,15 @@ These are the calls behind the three chat messages in the README. Enter the prom
 
 | Action | Tool and arguments sent by the client | What to check |
 | --- | --- | --- |
-| 1. Check the connection and find the page | Call `connection_status` with `{}`, `connection_ping` with `{"text":"bookshop"}` and `browser_context` with `{}`. | Look for `connected: true` and `text: "bookshop"`. Find the bookshop URL in `tabs` and take the `tabId` from that entry. |
-| 2. Inspect the page and preview a row | Call `workflow_contract` with `{"nodeTools":["emitExtractNode"],"probeTools":["snapshot","probeExtract"]}`. Use the selected `tabId` for both `page_probe` calls. Start with `tool: "snapshot"`, then use `tool: "probeExtract"` with the card `selectors` and two column `steps` in `params`. | The snapshot contains a book title. On the homepage `totalMatched` is 4. The `sample` preview shows `title` and `price` for just the first two rows. |
-| 3. Save and check the rule | Pass `tabId`, a fresh UUID `requestId` and the full `workflow` object to `workflow_save`. The linked bookshop rule supplies that object. Call `workflow_get` with the returned `workflowId`. | A new workflow returns `ok: true`, `updated: false` and its `workflowId`. Check the output dataset is `bookshop_demo`. With `nextAction.type` equal to `confirm_execution`, wait for a separate user confirmation. |
-| 4. Start and wait for completion | After confirmation, call `workflow_run` with that `workflowId`, the target `tabId` and a new UUID for this run’s `requestId`. Pass the returned `runId` to `run_get`. Add `logLimit: 3` for recent logs. | Use `runId` to follow this run. Wait for `run.status` to reach `SUCCESS`. In this example `run.savedRows` is 4. If it reaches `FAILED`, read the `logs` in the same response. |
+| 1. Open the target URL | Call `page_open` with the bookshop `url` and a UUID `requestId`. Use `browser_context` when the user identifies an existing tab. | Take the actual URL, `tabId` and `pageRef` from the same bound browser service. |
+| 2. Inspect the page and preview a row | Call `workflow_contract` with `{"nodeTools":["emitExtractNode"],"probeTools":["snapshot","probeExtract"]}`. Use the returned `tabId` and `pageRef` for both `page_probe` calls. Start with `tool: "snapshot"`, then use `tool: "probeExtract"` with the card `selectors` and two column `steps` in `params`. | The snapshot contains a book title. On the homepage `totalMatched` is 4. The `sample` preview shows `title` and `price` for just the first two rows. |
+| 3. Save and check the rule | Pass `tabId`, `pageRef`, a fresh UUID `requestId` and the full `workflow` object to `workflow_save`. The linked bookshop rule supplies that object. Call `workflow_get` with the returned `workflowId`. | A new workflow returns `ok: true`, `updated: false` and its `workflowId`. Check the output dataset is `bookshop_demo`. With `nextAction.type` equal to `confirm_execution`, wait for a separate user confirmation. |
+| 4. Start and wait for completion | After confirmation, call `workflow_run` with that `workflowId`, the target `tabId` and `pageRef` and a new UUID for this run’s `requestId`. Pass the returned `runId` to `run_get`. Add `logLimit: 3` for recent logs. | Use `runId` to follow this run. Wait for `run.status` to reach `SUCCESS`. In this example `run.savedRows` is 4. If it reaches `FAILED`, read the `logs` in the same response. |
 | 5. Read the stored rows | Send `{"query":"bookshop_demo"}` to `dataset_list`. Check `datasetName`, `fields` and `rowsCount` in `datasets`. Call `dataset_read` with the exact `datasetName`, or pass the returned `id` as `datasetId`. | After the first run on an empty dataset, `total` is 4 and `rows` includes *Between Mountains and Seas* at ¥32.00. |
 
-The example file is the complete **workflow argument** for `workflow_save`. To reproduce the preview, take `selectors` and `steps` from its first node and pass them as the `params` of `probeExtract`. Get the current tab ID from `browser_context` and generate write-request UUIDs in the client. [View the complete bookshop workflow JSON](examples/bookshop-workflow.json)
+Saving leaves the tab open. When the user explicitly asks to close a specific page, call `page_close` with its `tabId`, `pageRef`, a fresh `requestId` and `userRequested: true`. After navigation, refresh the page reference from the same service.
+
+The example file is the complete **workflow argument** for `workflow_save`. To reproduce the preview, take `selectors` and `steps` from its first node and pass them as the `params` of `probeExtract`. Get the tab ID and page reference from `page_open` or `browser_context` and generate write-request UUIDs in the client. [View the complete bookshop workflow JSON](examples/bookshop-workflow.json)
 
 To check what your own client sends after it has saved the data, start with this `params` object for MCP `tools/call`.
 
@@ -163,17 +169,19 @@ Supply exactly one of `datasetId` or `datasetName` to `dataset_read`. Pages star
 
 ### Manage multiple browser profiles
 
-The setup command from the extension binds the client to the instance UUID of that browser profile. Give each instance its own MCP service name when connecting several profiles. To manage connections by their registration number, run the following in your terminal.
+Codex registers a separate server for each browser profile. For example, Chrome connection `c2` registers as `jtcrpa_chrome_c2`. If the name is taken, setup appends `_2`, `_3`, and so on. Running setup again shortens older default names that include eight characters from the binding ID. Customized entries keep their names. When several profiles are online, refer to the intended connection in your task, such as “Chrome c2.” Each server stays bound to its registered browser. To manage registrations by number, use the commands below.
 
 ```sh
 jtcrpa-mcp list
 jtcrpa-mcp list --json
 ```
 
-If the list shows `待选择实例` (select an instance), enable MCP in the intended profile and run the `add ... --instance ...` command shown in the list. Profiles with the same extension ID can be selected separately. After selecting a target, substitute its connection number for `c1` in this example.
+If the list shows `待选择实例` (select an instance) and you use Codex, turn on **MCP connection** in the intended profile and run the command shown under **Codex**. The bridge picks that instance automatically, even when several profiles share an extension ID.
+
+For manual configuration of older setups or other clients, use the `add ... --instance ...` command from the list, then generate a configuration with the registered number. For example, this command exports the Claude Code configuration for `c1`.
 
 ```sh
-jtcrpa-mcp config --connection c1 --client codex
+jtcrpa-mcp config --connection c1 --client claude
 ```
 
 The supported client identifiers are `codex`, `claude` and `deepseek`. Omit `--client` to print all three configurations. The generated startup arguments contain the registration’s binding UUID. To switch to a different extension ID or selected instance, add the new connection, update the client, then run `jtcrpa-mcp remove` to select and confirm the old registration. In scripts, `jtcrpa-mcp remove c1` removes the specified entry directly. The old client configuration returns `CONNECTION_REMOVED` even if its display number is later reused.
@@ -183,16 +191,16 @@ The supported client identifiers are `codex`, `claude` and `deepseek`. Omit `--c
 | Symptom | What to do |
 | --- | --- |
 | MCP connection is missing from the sidebar’s Settings menu | Check the extension name is Jiutouchong Agent. The Chrome and Firefox store releases of `2.0.2` lack this feature. If you received an MCP-enabled Chrome ZIP from Jiutouchong, extract it, open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and select the folder containing `manifest.json`. Open that extension’s MCP page and copy its own registration command. [Contact Jiutouchong](https://jtcrpa.com/en/contact) |
-| `codex mcp list` has no `jtcrpa` entry | Under **Connect an AI app → Codex**, copy the entire command. Run it under the same user account you use for Codex, then open a new session. |
-| The echo works, but the bookshop tab is missing | Open the bookshop in the connected profile and ask the client to list tabs again. If the page was open before installing the extension, refresh it. |
+| An old Codex session still uses another profile | Register the intended profile. If your current session has not loaded the new server, reopen Codex when convenient to load the configuration. |
+| The echo works, but the bookshop tab is missing | Give the assistant the URL and ask it to open the page with Jiutouchong’s `page_open` in the bound browser. |
 | You have a `runId` but see no rows | Use `run_get` to check the run’s status and `savedRows`. Read recent logs on failure. For a successful run with zero writes, check the tab and the extraction node’s `dataset_name`, then preview the extraction again. If rows were saved but a column is missing, use `dataset_list` to check the dataset name and `fields`. |
 | A write request timed out | Pass its original `requestId` to `connection_status` to inspect the request. For a start request, also query recent runs with `run_get` filtered by `workflowId` before retrying. |
 | PowerShell says running scripts is disabled (`.ps1`) | Replace `npm` with `npm.cmd`, or `jtcrpa-mcp` with `jtcrpa-mcp.cmd`, at the start of the command. Keep the same arguments, for example `jtcrpa-mcp.cmd list`. |
 | The terminal cannot find `jtcrpa-mcp` | Run `npm prefix -g` to locate the global command directory. On macOS the executables are in its `bin` subdirectory. Check that the executable directory is on your `PATH`, reopen the terminal and run `jtcrpa-mcp --version`. |
 | An npm mirror cannot find a newly published version | Install from the public registry with `npm install --global jtcrpa-mcp --registry=https://registry.npmjs.org`. |
 | `Access to the specified native messaging host is forbidden` | Copy the registration command from the current extension, check its complete ID against `list`, run the command and turn MCP on again. Register the new ID if a development build’s extension ID has changed. |
-| The native messaging interface is unavailable, or the browser requests permission | Reload Jiutouchong from the browser’s extensions page, enable the connection again and allow native messaging when prompted. |
-| `BROWSER_OFFLINE` or tabs from the wrong browser | Open the target profile, enable MCP and compare its instance UUID with the client configuration. If a copied profile produces an instance conflict, use the extension’s option to generate a new instance ID and update that client. |
+| Native messaging is unavailable immediately after granting permission | Save open edits and let active or paused workflows finish. The extension will reload once. If it still requests a manual reload, use the browser’s extensions page. |
+| `BROWSER_OFFLINE` or the binding changed | Enable MCP in the target browser. If native host registration is missing, the page shows the registration command. If the binding changed, update the client configuration using the connection management steps above. |
 | `CONNECTION_INSTANCE_NOT_SELECTED` or `CONNECTION_REMOVED` | For the first error, select a target using the instruction from `list`. For the second, generate a fresh client configuration from an existing registration. |
 
 ### Upgrade or uninstall

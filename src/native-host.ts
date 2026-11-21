@@ -69,7 +69,7 @@ export async function runNativeHost(args: string[]) {
         closeTransport = listenForClients(current.pipe, {
             ready() {
                 clearTimeout(timer);
-                if (!closed) send({ type: 'connected', version: VERSION, instanceId: current.instanceId });
+                if (!closed) send({ type: 'connected', version: VERSION, instanceId: current.instanceId, codexSetup: true });
             },
             request(request, respond) {
                 if (closed) return;
@@ -79,14 +79,19 @@ export async function runNativeHost(args: string[]) {
                     respond({ ok: false, error: 'UNAUTHORIZED' });
                     return;
                 }
-                if (!(METHODS as readonly string[]).includes(request.method ?? '')) {
+                if (request.expectedInstanceId !== undefined && (request.expectedInstanceId !== current.instanceId || !validInstance(request.codexBinding))) {
+                    respond({ ok: false, error: 'CONNECTION_INSTANCE_MISMATCH' });
+                    return;
+                }
+                if (request.method !== 'codex_setup' && !(METHODS as readonly string[]).includes(request.method ?? '')) {
                     respond({ ok: false, error: 'UNKNOWN_METHOD' });
                     return;
                 }
                 const id = ++sequence;
                 const timeout = setTimeout(() => { pending.delete(id); respond({ ok: false, error: 'EXTENSION_TIMEOUT' }); }, 45000);
                 pending.set(id, { respond, timer: timeout });
-                send({ type: 'request', version: VERSION, id, method: request.method, params: request.params });
+                send({ type: 'request', version: VERSION, id, method: request.method, params: request.params,
+                    expectedInstanceId: request.expectedInstanceId, codexBinding: request.codexBinding, codexAccess: request.codexAccess === true });
             },
             fail,
             closed() { cleanup(); process.stdin.destroy(); },

@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { ForwardedToolDefinition } from './definition.ts';
+import { pageTargetFields, type ForwardedToolDefinition } from './definition.ts';
 
 const probeNames = [
     'snapshot',
@@ -13,9 +13,24 @@ const probeNames = [
 export const authoringTools: ForwardedToolDefinition[] = [
     {
         name: 'browser_context',
-        description: '列出当前浏览器实例中的网页标签页摘要。调用页面探针或保存工作流前，先选定明确的 tabId。',
+        description: '列出绑定浏览器中的网页及其 tabId、pageRef。用户提供目标网址时可直接调用 page_open。',
         schema: z.object({}),
         readOnly: true,
+        openWorld: false,
+    },
+    {
+        name: 'page_open',
+        description: '在此服务绑定的浏览器打开用户指定的 HTTP(S) 网址，唯一精确匹配时复用已有页，否则新开后台页。返回实例、tabId、pageRef 和实际网址。编排时在同一服务使用该页，保存后保留。相同请求重用同一 requestId。',
+        schema: z.object({ url: z.url({ protocol: /^https?$/ }), requestId: z.uuid() }),
+        readOnly: false,
+        destructive: false,
+        openWorld: true,
+    },
+    {
+        name: 'page_close',
+        description: '仅在用户明确要求关闭指定标签页时调用，使用该页最近的 tabId 和 pageRef。工作流保存或编写完成后默认保留页面。用户的关页意图须来自当前对话。',
+        schema: z.object({ ...pageTargetFields, requestId: z.uuid(), userRequested: z.literal(true) }),
+        readOnly: false,
         openWorld: false,
     },
     {
@@ -40,7 +55,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
             'clean 通过现有沙箱执行。不提供任意 RPC 或 JavaScript 求值接口。',
         schema: z.object({
             tool: z.enum(probeNames),
-            tabId: z.number().int().positive(),
+            ...pageTargetFields,
             frameId: z.number().int().nonnegative().optional(),
             params: z.record(z.string(), z.unknown()).optional(),
             requestId: z.uuid().optional(),
@@ -81,7 +96,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
             '不得盲目更换请求编号重试。',
         schema: z.object({
             requestId: z.uuid(),
-            tabId: z.number().int().positive(),
+            ...pageTargetFields,
             workflow: z.record(z.string(), z.unknown()),
         }),
         readOnly: false,

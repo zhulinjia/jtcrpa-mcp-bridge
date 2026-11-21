@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { manageHostRegistration, removeConnection, clientConfig } from '../dist/install.js';
+import { connectCodex } from '../dist/codex-setup.js';
 import { listConnections, rememberInstance } from '../dist/connections.js';
-import { instanceFile } from '../dist/paths.js';
+import { instanceFile, sessionEndpoint } from '../dist/paths.js';
 import { nativeCaller } from '../dist/browser-identity.js';
 import { randomUUID } from 'node:crypto';
 import { callExtension } from '../dist/ipc.js';
@@ -87,6 +89,59 @@ function installedFiles(fixture) {
         return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined;
     });
 }
+
+test('connect-codex returns after the browser acknowledges its registration without starting a client', async t => {
+    const fixture = isolatedInstallation(t);
+    await manageHostRegistration('add', ['--chrome-id', chromeId]);
+    const instanceId = randomUUID(), ticket = randomUUID();
+    const session = randomUUID().replaceAll('-', '');
+    const pipe = sessionEndpoint(session);
+    const handshakes = [];
+    const server = net.createServer(socket => {
+        let data = '';
+        socket.on('data', chunk => {
+            data += chunk;
+            if (!data.includes('\n')) return;
+            const request = JSON.parse(data);
+            handshakes.push(request);
+            socket.end(JSON.stringify({ ok: true, result: { instanceId, label: '工作' } }) + '\n');
+        });
+    });
+    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(pipe, resolve); });
+    try {
+        const caller = { kind: 'chrome', extensionId: chromeId };
+        fs.writeFileSync(instanceFile(instanceId), JSON.stringify({ version: 1, instanceId, session, pipe,
+            token: 'a'.repeat(64), pid: process.pid, caller }));
+        await rememberInstance(caller, instanceId);
+        const fakeCodex = fixture.file('codex.exe');
+        fs.writeFileSync(fakeCodex, '');
+        const previousPath = process.env.PATH;
+        process.env.PATH = fixture.root + path.delimiter + previousPath;
+        t.after(() => { process.env.PATH = previousPath; });
+        const nativeRegistrationCommand = childProcess.spawnSync;
+        const configCalls = [];
+        t.mock.method(childProcess, 'spawnSync', (file, args, options) => {
+            if (file !== (mac ? 'codex' : fakeCodex)) return nativeRegistrationCommand(file, args, options);
+            assert.notEqual(options.stdio, 'inherit');
+            assert.equal(args[0], 'mcp');
+            assert.ok(['list', 'add'].includes(args[1]));
+            configCalls.push(args);
+            return { status: 0, stdout: args[1] === 'list' ? '[]' : '', stderr: '' };
+        });
+        t.mock.method(childProcess, 'spawn', () => assert.fail('Unexpected background process during registration'));
+        syncBuiltinESMExports();
+        await connectCodex(['--chrome-id', chromeId, '--instance', instanceId, '--setup', ticket]);
+        const [binding] = fixture.read('connections.json').connections;
+        assert.equal(binding.codexServer, 'jtcrpa_chrome_c1');
+        assert.deepEqual(configCalls, [['mcp', 'list', '--json'], ['mcp', 'add', binding.codexServer, '--', process.execPath,
+            cli, 'mcp', '--connection', binding.bindingId, '--expect-instance', instanceId]]);
+        assert.deepEqual(handshakes.map(item => [item.method, item.params.ticket]), [['codex_setup', ticket], ['codex_setup', ticket]]);
+        assert.equal(handshakes[1].params.serverName, binding.codexServer);
+        assert.ok(fixture.messages.at(-1).includes(binding.codexServer));
+    } finally {
+        await new Promise(resolve => server.close(resolve));
+    }
+});
 
 test('add writes exact launcher and browser-specific manifests, then uninstall removes owned registration', async (t) => {
     const fixture = isolatedInstallation(t);

@@ -7,9 +7,14 @@ import { validInstance } from './protocol.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { replaceFile } from './registration-files.ts';
 
-export interface Connection extends BrowserTarget { id: string; instanceId: string | null; bindingId?: string }
+export interface Connection extends BrowserTarget { id: string; instanceId: string | null; bindingId?: string; codexServer?: string; label?: string }
 interface Observation extends BrowserTarget { instanceId: string }
 export interface ConnectionStore { nextId: number; connections: Connection[]; observed: Observation[] }
+
+export function connectionName(connection: Connection): string {
+    const name = (connection.kind === 'chrome' ? 'Chrome' : 'Firefox') + ' · ' + connection.id;
+    return connection.label ? name + '（' + connection.label + '）' : name;
+}
 
 export const connectionFile = () => path.join(bridgeRoot(), 'connections.json');
 export const validConnectionId = (id: string) => /^c[1-9]\d*$/.test(id);
@@ -97,8 +102,8 @@ export function listConnections(live = listRunningHosts(), uncertain: ReadonlySe
             && (!record.instanceId || record.instanceId === host.instanceId));
         const status: 'online' | 'unconfirmed' | 'offline' = selected.some(item => item.online) ? 'online'
             : awaitingHandshake || selected.some(item => item.online === null) ? 'unconfirmed' : 'offline';
-        const { id, kind, extensionId, instanceId, bindingId } = record;
-        return { id, kind, extensionId, instanceId, bindingId, status, candidates };
+        const { id, kind, extensionId, instanceId, bindingId, label, codexServer } = record;
+        return { id, kind, extensionId, instanceId, bindingId, label, codexServer, status, candidates };
     });
     return { connections, unconfirmedInstances: unconfirmed.map(host => host.instanceId) };
 }

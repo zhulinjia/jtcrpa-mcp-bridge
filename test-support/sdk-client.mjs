@@ -9,8 +9,12 @@ export async function verifySdkConnection(instanceId, expectedOnline, bridgeHome
     const transport = new StdioClientTransport({ command: process.execPath, args: [bridgeCli, 'mcp', '--instance', instanceId], env: { ...process.env, ...(bridgeHome ? { JTCRPA_BRIDGE_HOME: bridgeHome } : {}) } });
     try {
         await client.connect(transport);
+        assert.match(client.getInstructions() ?? '', /Keep the page open after saving/);
         const tools = await client.listTools();
-        assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
+        assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'page_close', 'page_open', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
+        for (const name of ['page_probe', 'workflow_save', 'workflow_run', 'page_close']) {
+            assert.ok(tools.tools.find(tool => tool.name === name).inputSchema.required.includes('pageRef'));
+        }
         const contract = tools.tools.find((tool) => tool.name === 'workflow_contract');
         assert.equal(contract.inputSchema.properties.guideDetail, undefined);
         assert.ok(tools.tools.find((tool) => tool.name === 'workflow_save').description.includes('等待本次保存之后的明确确认'));
