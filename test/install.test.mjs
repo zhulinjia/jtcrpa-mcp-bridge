@@ -46,8 +46,15 @@ function isolatedInstallation(t, { failRegistry, failDirectory } = {}) {
         return Buffer.alloc(0);
     });
     t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
-        if (mac && command === '/usr/bin/pgrep') return { status: chromeProcesses.length ? 0 : 1, stdout: '123' };
-        if (mac && command === '/bin/ps') return { status: 0, stdout: chromeProcesses.join('\n') };
+        if (mac && command === '/usr/bin/pgrep') {
+            const name = new RegExp('^(?:' + args.at(-1) + ')$');
+            const pids = chromeProcesses.flatMap((line, i) => name.test(path.basename(line.split(' --')[0])) ? [i + 100] : []);
+            return { status: pids.length ? 0 : 1, stdout: pids.join('\n') };
+        }
+        if (mac && command === '/bin/ps') {
+            const pids = args[args.indexOf('-p') + 1].split(',');
+            return { status: 0, stdout: pids.map(pid => chromeProcesses[Number(pid) - 100]).join('\n') };
+        }
         assert.equal(options.windowsHide, true);
         if (command === 'powershell.exe') {
             assert.ok(args[args.indexOf('-File') + 1].endsWith('read-registration.ps1'));
@@ -95,7 +102,15 @@ function installedFiles(fixture) {
 
 test('connect-codex returns after the browser acknowledges its registration without starting a client', async t => {
     const fixture = isolatedInstallation(t);
-    await manageHostRegistration('add', ['--chrome-id', chromeId]);
+    const setup = ['--chrome-id', chromeId];
+    const edgeRoot = path.join(os.homedir(), 'Library/Application Support/Microsoft Edge');
+    if (mac) {
+        fs.mkdirSync(edgeRoot, { recursive: true });
+        fs.writeFileSync(path.join(edgeRoot, 'Local State'), '{}');
+        fixture.chromeProcesses.push('/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge');
+        setup.push('--chrome-user-data-dir', edgeRoot);
+    }
+    await manageHostRegistration('add', setup);
     const instanceId = randomUUID(), ticket = randomUUID();
     const session = randomUUID().replaceAll('-', '');
     const pipe = sessionEndpoint(session);
@@ -140,6 +155,7 @@ test('connect-codex returns after the browser acknowledges its registration with
             cli, 'mcp', '--connection', binding.bindingId, '--expect-instance', instanceId]]);
         assert.deepEqual(handshakes.map(item => [item.method, item.params.ticket]), [['codex_setup', ticket], ['codex_setup', ticket]]);
         assert.equal(handshakes[1].params.serverName, binding.codexServer);
+        if (mac) assert.deepEqual(fixture.read('installation.json').chromeDataDirs, [fs.realpathSync(edgeRoot)]);
         assert.ok(fixture.messages.at(-1).includes(binding.codexServer));
     } finally {
         await new Promise(resolve => server.close(resolve));
@@ -486,7 +502,7 @@ test('macOS registers the running Chrome root containing the extension and remem
     assert.equal(fs.existsSync(hostFile(other)), false);
     assert.equal(fs.existsSync(hostFile(path.join(os.homedir(), 'Library/Application Support/Google/Chrome'))), false);
     fs.copyFileSync(path.join(dev, prefs), path.join(other, prefs));
-    await assert.rejects(manageHostRegistration('add', ['--chrome-id', chromeId]), /多个运行中的 Chrome/);
+    await assert.rejects(manageHostRegistration('add', ['--chrome-id', chromeId]), /--chrome-user-data-dir/);
     await manageHostRegistration('add', ['--chrome-id', chromeId, '--chrome-user-data-dir', other]);
     assert.equal(fs.readlinkSync(hostFile(other)), expected);
     fixture.chromeProcesses.length = 0;
@@ -494,6 +510,23 @@ test('macOS registers the running Chrome root containing the extension and remem
     assert.deepEqual(fixture.read('chrome.json').allowed_origins, []);
     await manageHostRegistration('uninstall', []);
     for (const root of [dev, other]) assert.equal(fs.lstatSync(hostFile(root), { throwIfNoEntry: false }), undefined);
+});
+
+test('macOS resolves a custom Edge root alongside Chrome and requests a directory for an ambiguous live setup', { skip: !mac }, async t => {
+    const fixture = isolatedInstallation(t);
+    const google = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
+    const edge = fixture.file('custom Edge root');
+    fs.mkdirSync(google, { recursive: true });
+    fs.mkdirSync(path.join(edge, 'Default'), { recursive: true });
+    fs.writeFileSync(path.join(edge, 'Local State'), '{}');
+    fixture.chromeProcesses.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge --user-data-dir=' + edge);
+    await assert.rejects(connectCodex(['--chrome-id', chromeId, '--instance', randomUUID(), '--setup', randomUUID()]),
+        /--chrome-user-data-dir/);
+    fs.writeFileSync(path.join(edge, 'Default', 'Preferences'), JSON.stringify({ extensions: { settings: { [chromeId]: {} } } }));
+    await manageHostRegistration('add', ['--chrome-id', chromeId]);
+    assert.equal(fs.readlinkSync(path.join(edge, 'NativeMessagingHosts', HOST + '.json')), fixture.file('chrome.json'));
+    assert.equal(fs.existsSync(path.join(google, 'NativeMessagingHosts')), false);
 });
 
 test('macOS retains a legacy default registration when adding a temporary Chrome root', { skip: !mac }, async t => {

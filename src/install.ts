@@ -56,13 +56,13 @@ function installationPaths(): InstallationPaths {
     return { root, record: path.join(root, 'installation.json'), launcher: path.join(root, launcher) };
 }
 
-export async function manageHostRegistration(command: 'add' | 'uninstall', args: string[]): Promise<void> {
+export async function manageHostRegistration(command: 'add' | 'uninstall', args: string[], { fromRunningBrowser = false } = {}): Promise<void> {
     if (command === 'uninstall' && args.length) throw new Error('uninstall does not accept arguments. See jtcrpa-mcp uninstall --help.');
     const paths = installationPaths();
     await withRegistrationLock(() => {
         if (command === 'uninstall') uninstallNativeHost(paths);
         else {
-            const { targets, instanceId, chromeDataDir } = parseBrowserTargets(args);
+            const { targets, instanceId, chromeDataDir } = parseBrowserTargets(args, fromRunningBrowser);
             addNativeHost(paths, targets, instanceId, chromeDataDir);
         }
     });
@@ -169,7 +169,7 @@ function uninstallNativeHost(paths: InstallationPaths): void {
     console.log('Native host unregistered.');
 }
 
-function parseBrowserTargets(args: string[]) {
+function parseBrowserTargets(args: string[], fromRunningBrowser: boolean) {
     const { values } = parseArgs({ args, options: {
         'chrome-user-data-dir': { type: 'string' }, 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' }, instance: { type: 'string' },
     } });
@@ -187,7 +187,7 @@ function parseBrowserTargets(args: string[]) {
     if (explicit !== undefined && (!chrome || process.platform !== 'darwin')) {
         throw new Error('--chrome-user-data-dir 仅适用于 macOS 上的 --chrome-id。');
     }
-    const chromeDataDir = chrome && process.platform === 'darwin' ? resolveChromeDataDir(chrome, explicit) : undefined;
+    const chromeDataDir = chrome && process.platform === 'darwin' ? resolveChromeDataDir(chrome, explicit, fromRunningBrowser) : undefined;
     return { targets, instanceId: values.instance, chromeDataDir };
 }
 

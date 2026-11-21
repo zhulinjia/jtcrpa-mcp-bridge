@@ -1,6 +1,6 @@
 {
   "name": "jtcrpa-mcp",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "description": "在 macOS 和 Windows 上用 Codex 等 AI 客户端连接九头虫 Agent，创建和运行网页采集工作流、读取数据集。Connect AI clients to Jiutouchong Agent on macOS and Windows via MCP to create and run web scraping workflows and read datasets.",
   "homepage": "https://jtcrpa.com/",

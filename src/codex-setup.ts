@@ -45,7 +45,7 @@ export async function connectCodex(args: string[]) {
     const registration = ['--' + target.kind + '-id', target.extensionId];
     const directory = values['chrome-user-data-dir'];
     if (directory !== undefined) registration.push('--chrome-user-data-dir', directory);
-    await manageHostRegistration('add', registration);
+    await manageHostRegistration('add', registration, { fromRunningBrowser: true });
     console.log('正在等待发起接入的浏览器…');
     const setup = await bindCodexBrowser(target, instanceId, ticket);
     console.log(setup.displayName + ' 已就绪。Codex MCP 服务名为 ' + setup.name);

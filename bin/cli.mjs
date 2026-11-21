@@ -13,7 +13,7 @@ const usage = [
     '  connect-codex (--chrome-id <扩展ID> | --firefox-id <扩展ID>) --instance <UUID> --setup <UUID>',
     '  config (--connection <连接编号> | --instance <UUID>) [--client codex|claude|deepseek]',
     '  mcp (--connection <配置中的绑定UUID> | --instance <实例UUID>)',
-    '  macOS Chrome 的 add 和 connect-codex 可加 --chrome-user-data-dir <用户数据根目录>',
+    '  macOS 版 Chrome 和 Edge 的 add 和 connect-codex 可加 --chrome-user-data-dir <用户数据根目录>',
     '维护',
     '  uninstall    清除当前用户的本机宿主登记',
     '  --version    显示桥接器版本',
