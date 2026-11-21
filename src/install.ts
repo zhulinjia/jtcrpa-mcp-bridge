@@ -49,7 +49,8 @@ export async function clientConfig(target: string) {
 
 function installationPaths(): InstallationPaths {
     const root = bridgeRoot();
-    return { root, record: path.join(root, 'installation.json'), launcher: path.join(root, 'host.cmd') };
+    const launcher = process.platform === 'darwin' ? 'host.sh' : 'host.cmd';
+    return { root, record: path.join(root, 'installation.json'), launcher: path.join(root, launcher) };
 }
 
 export async function manageHostRegistration(command: 'add' | 'uninstall', args: string[]): Promise<void> {
@@ -65,7 +66,7 @@ export async function manageHostRegistration(command: 'add' | 'uninstall', args:
 }
 
 function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], instanceId?: string): void {
-    if (/["%\r\n]/.test(cli + process.execPath + paths.root)) throw new Error('Unsupported character in installation path');
+    if (process.platform === 'win32' && /["%\r\n]/.test(cli + process.execPath + paths.root)) throw new Error('Unsupported character in installation path');
     const backup = captureInstallationBackup(paths, targets);
     const previous = fs.existsSync(paths.record) ? readInstallationRecord(paths.record) : { kinds: [] };
     const files = sharedInstallationFiles(paths, previous, targets);
@@ -108,7 +109,9 @@ export async function removeConnection(expected: Connection): Promise<void> {
 
 function commitRegistration(paths: InstallationPaths, backup: InstallationBackup, files: Map<string, string>, register: Map<BrowserKind, string>): boolean {
     for (const [file, contents] of files) {
-        if (backup.files.get(file)?.toString('utf8') === contents) files.delete(file);
+        if (backup.files.get(file)?.toString('utf8') !== contents) continue;
+        if (process.platform === 'darwin' && file === paths.launcher && (fs.statSync(file).mode & 0o777) !== 0o700) continue;
+        files.delete(file);
     }
     if (files.size === 0 && register.size === 0) return false;
     if (files.has(paths.launcher) && listRunningHosts().length) {
@@ -119,18 +122,18 @@ function commitRegistration(paths: InstallationPaths, backup: InstallationBackup
     const updatedRegistry: BrowserKind[] = [];
     try {
         for (const [file, contents] of files) {
-            replaceFile(file, contents);
+            replaceFile(file, contents, file === paths.launcher ? 0o700 : 0o600);
             updatedFiles.push(file);
         }
         for (const [kind, manifest] of register) {
-            updatedRegistry.push(kind);
             registerHost(kind, manifest);
+            updatedRegistry.push(kind);
         }
     } catch (error) {
         for (const kind of updatedRegistry) restoreHostRegistration(kind, backup.registrations.get(kind), manifestPath(paths, kind));
         for (const file of updatedFiles) {
             const contents = backup.files.get(file);
-            if (contents) replaceFile(file, contents);
+            if (contents) replaceFile(file, contents, file === paths.launcher ? 0o700 : 0o600);
             else removeFileIfPresent(file);
         }
         throw error;
@@ -172,7 +175,14 @@ function parseBrowserTargets(args: string[]) {
 }
 
 function prepareInstallationDirectory(root: string): void {
-    fs.mkdirSync(root, { recursive: true });
+    fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+    if (process.platform === 'darwin') {
+        fs.chmodSync(root, 0o700);
+        const instances = path.join(root, 'instances');
+        fs.mkdirSync(instances, { recursive: true, mode: 0o700 });
+        fs.chmodSync(instances, 0o700);
+        return;
+    }
     execFileSync('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
         '-File', fileURLToPath(new URL('../windows/secure-directory.ps1', import.meta.url)),
@@ -210,7 +220,10 @@ function captureInstallationBackup(paths: InstallationPaths, targets: BrowserTar
 
 function sharedInstallationFiles(paths: InstallationPaths, previous: InstallationRecord, targets: BrowserTarget[]): Map<string, string> {
     // 批处理文件按 UTF-8 写入，先切换代码页再读取含中文的 Node / CLI 路径。
-    const launcher = `@echo off\r\nchcp 65001 >nul\r\n"${process.execPath}" "${cli}" native-host "%~1" "%~2"\r\n`;
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    const launcher = process.platform === 'darwin'
+        ? `#!/bin/sh\nexport JTCRPA_BRIDGE_HOME=${quote(paths.root)}\nexec ${quote(process.execPath)} ${quote(cli)} native-host "$@"\n`
+        : `@echo off\r\nchcp 65001 >nul\r\n"${process.execPath}" "${cli}" native-host "%~1" "%~2"\r\n`;
     const requestedKinds = targets.map((target) => target.kind);
     const record: InstallationRecord = {
         kinds: [...new Set([...previous.kinds, ...requestedKinds])],

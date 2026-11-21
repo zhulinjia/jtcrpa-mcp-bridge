@@ -31,7 +31,7 @@ function targetOptions(config) {
     return values;
 }
 try {
-    if (process.platform !== 'win32') throw new Error('This release supports native Windows only.');
+    if (!['win32', 'darwin'].includes(process.platform)) throw new Error('This release supports macOS and Windows.');
     if (command === 'uninstall' && args.length === 1 && ['--help', '-h'].includes(args[0])) {
         console.log('Usage: jtcrpa-mcp uninstall\n清除当前用户的本机宿主登记和连接。请先关闭浏览器中的 MCP。');
     }

@@ -8,20 +8,22 @@
 
 ### 首次连接
 
-1. **浏览器里找到 MCP 入口。** 在 Windows 上将**九头虫 Agent** 添加到 Chrome 或 Firefox。点击浏览器工具栏的九头虫图标打开侧边栏，再点底部的 **设置菜单 ☰ → MCP 连接**。打开页面后应能看到 **开启 MCP 连接** 开关。[设置菜单截图](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-zh.png) · [扩展安装说明](https://doc.jtcrpa.com/guide/install.html)
+1. **浏览器里找到 MCP 入口。** 在 macOS 或 Windows 上将**九头虫 Agent** 添加到 Chrome 或 Firefox。点击浏览器工具栏的九头虫图标打开侧边栏，再点底部的 **设置菜单 ☰ → MCP 连接**。打开页面后应能看到 **开启 MCP 连接** 开关。[设置菜单截图](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-zh.png) · [扩展安装说明](https://doc.jtcrpa.com/guide/install.html)
 
    如果菜单里没有这个入口，先确认扩展版本。Chrome 和 Firefox 商店发布的 `2.0.2` 都缺少 MCP。只有商店版时，可向九头虫咨询支持 MCP 的安装包。[联系九头虫](https://jtcrpa.com/contact)
 
-2. **在 PowerShell 安装桥接器。** 从 Windows 开始菜单打开 PowerShell。需要 Windows PowerShell 5.1 和 Node.js 20.19.0 或更高版本。逐行运行下面的命令，第一行检查 Node.js，最后一行应显示桥接器版本号。[Node.js 下载](https://nodejs.org/en/download)
+2. **在终端安装桥接器。** 需要 Node.js 20.19.0 或更高版本。macOS 打开「终端」，Windows 打开 PowerShell 5.1。已发布的兼容版本可用下面的命令安装。[Node.js 下载](https://nodejs.org/en/download)
 
-   ```powershell
+   ```sh
    node --version
    npm install -g jtcrpa-mcp
    jtcrpa-mcp --version
    ```
 
-3. **把这个浏览器连上。** 回到扩展的 **MCP 连接 → 注册当前浏览器**，点击复制按钮，把整条命令粘贴到刚才的 PowerShell 并按回车。页面已填好当前扩展的 ID。回到扩展打开 **开启 MCP 连接**，浏览器询问时允许本机通信。看到 **浏览器与本机程序已连接** 再继续。
-4. **把 Codex 连上。** 在同一页的 **接入外部 AI → Codex** 点击 **复制 Codex 接入命令**，在 PowerShell 粘贴并执行。运行 `codex mcp list` 应能看到 `jtcrpa`。打开一个新的 Codex 会话，下面三条消息都发在这个会话里。已安装并登录的 Codex CLI 可以在 PowerShell 输入 `codex` 打开。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code 或 DeepSeek Harness](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/usage.md#客户端配置)
+   要直接使用本仓库的 macOS 版本，在仓库根目录依次运行 `npm ci`、`npm run build` 和 `npm link`，再运行 `jtcrpa-mcp --version`。
+
+3. **登记当前浏览器。** 在扩展的 **MCP 连接 → 注册当前浏览器** 复制命令。macOS 使用 `jtcrpa-mcp add --chrome-id '扩展ID'`，Firefox 使用 `--firefox-id`。把引号里的内容换成页面给出的完整扩展 ID。如果复制的命令以 `jtcrpa-mcp.cmd` 开头，在 Mac 终端改为 `jtcrpa-mcp`。执行后回到扩展打开 **开启 MCP 连接**，按提示允许本机通信，等到显示 **浏览器与本机程序已连接**。
+4. **接入 Codex。** 在 macOS 终端运行 `jtcrpa-mcp config --instance '实例UUID' --client codex`，使用同一页面显示的实例 UUID。将输出的 `[mcp_servers.jtcrpa]` 配置加入 `~/.codex/config.toml`，已有同名配置时更新该段。Windows 可直接在 PowerShell 运行扩展的 **接入外部 AI → Codex → 复制 Codex 接入命令**。运行 `codex mcp list` 确认出现 `jtcrpa`，然后打开新的 Codex 会话。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code 或 DeepSeek Harness](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/usage.md#客户端配置)
 
 ### 第一次用 MCP 采集书名和价格
 
@@ -60,20 +62,22 @@
 
 ### First-time setup
 
-1. **Find MCP in the browser.** On Windows, add **Jiutouchong Agent** to Chrome or Firefox. Click its toolbar icon to open the sidebar, then choose **Settings ☰ → MCP connection** at the bottom. Look for the **Enable MCP connection** switch. [See the Settings menu](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-en.png) · [Extension installation guide](https://doc.jtcrpa.com/en/guide/install.html)
+1. **Find MCP in the browser.** On macOS or Windows, add **Jiutouchong Agent** to Chrome or Firefox. Click its toolbar icon to open the sidebar, then choose **Settings ☰ → MCP connection** at the bottom. Look for the **Enable MCP connection** switch. [See the Settings menu](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-en.png) · [Extension installation guide](https://doc.jtcrpa.com/en/guide/install.html)
 
    If the menu entry is missing, check the extension build. Version `2.0.2` from both browser stores lacks MCP. If you only have the store release, contact Jiutouchong about an MCP-enabled build. [Contact Jiutouchong](https://jtcrpa.com/en/contact)
 
-2. **Install the bridge in PowerShell.** Open PowerShell from the Windows Start menu. You need Windows PowerShell 5.1 and Node.js 20.19.0 or later. Run these lines in order. The first prints your Node.js version and the last should print the bridge version. [Download Node.js](https://nodejs.org/en/download)
+2. **Install the bridge in a terminal.** Use Node.js 20.19.0 or later. Open Terminal on macOS or PowerShell 5.1 on Windows. For a published version supporting your platform, run the following commands. [Download Node.js](https://nodejs.org/en/download)
 
-   ```powershell
+   ```sh
    node --version
    npm install -g jtcrpa-mcp
    jtcrpa-mcp --version
    ```
 
-3. **Connect this browser.** On the extension’s **MCP connection** page, copy the command under **Register this browser**. Paste it into PowerShell and press Enter. It already contains your extension’s ID. Back in the extension, turn on **Enable MCP connection** and allow native messaging if prompted. Continue when you see **Browser connected to the local program**.
-4. **Connect Codex.** On the same page, under **Connect an AI app → Codex**, click **Copy Codex setup command** and run it in PowerShell. Run `codex mcp list` and look for `jtcrpa`. Open a new Codex session for the three messages below. If the Codex CLI is installed and you’re signed in, type `codex` in PowerShell to start it. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code or DeepSeek Harness](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/usage.md#client-configuration)
+   To use the macOS version directly from this checkout, run `npm ci`, `npm run build` and `npm link` in the repository root. Check with `jtcrpa-mcp --version`.
+
+3. **Register this browser.** Copy the command under **MCP connection → Register this browser**. On macOS, use `jtcrpa-mcp add --chrome-id 'extension-ID'` for Chrome or `--firefox-id` for Firefox. Replace the quoted value with the full extension ID from the page. If the copied command starts with `jtcrpa-mcp.cmd`, change it to `jtcrpa-mcp` in Terminal. Run it, turn on **Enable MCP connection**, grant native messaging permission if prompted and wait for **Browser connected to the local program**.
+4. **Connect Codex.** On macOS, run `jtcrpa-mcp config --instance 'instance-UUID' --client codex` using the instance UUID shown on that page. Add the generated `[mcp_servers.jtcrpa]` section to `~/.codex/config.toml`, replacing that section if it already exists. On Windows, run the extension’s **Connect an AI app → Codex → Copy Codex setup command** in PowerShell. Check that `codex mcp list` shows `jtcrpa`, then open a new Codex session. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code or DeepSeek Harness](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/usage.md#client-configuration)
 
 ### Collect your first four books
 

@@ -31,7 +31,8 @@ async function inspectConnections(): Promise<List> {
 }
 
 function printList(list: List): void {
-    if (!list.connections.length) console.log('尚未登记连接。请从插件的 MCP 页面复制 jtcrpa-mcp.cmd add 命令。');
+    const command = process.platform === 'win32' ? 'jtcrpa-mcp.cmd' : 'jtcrpa-mcp';
+    if (!list.connections.length) console.log(`尚未登记连接。请从插件的 MCP 页面复制 ${command} add 命令。`);
     for (const [i, item] of list.connections.entries()) {
         console.log(`${i + 1}. ${item.id}  ${browserNames[item.kind]}  ${item.extensionId}  ${states[item.status]}`);
         console.log('   目标实例  ' + (item.instanceId ?? '待选择实例'));
@@ -41,7 +42,7 @@ function printList(list: List): void {
         if (!item.instanceId && item.candidates.length) {
             const flag = item.kind === 'chrome' ? '--chrome-id' : '--firefox-id';
             const id = item.candidates.length === 1 ? item.candidates[0].instanceId : '<上方实例UUID>';
-            console.log(`   选择目标  jtcrpa-mcp.cmd add ${flag} ${item.extensionId} --instance ${id}`);
+            console.log(`   选择目标  ${command} add ${flag} ${item.extensionId} --instance ${id}`);
         }
     }
     for (const id of list.unconfirmedInstances) console.log('待确认归属的实例  ' + id);

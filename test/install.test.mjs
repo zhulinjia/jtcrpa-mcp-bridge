@@ -13,6 +13,10 @@ import { nativeCaller } from '../dist/browser-identity.js';
 import { randomUUID } from 'node:crypto';
 import { callExtension } from '../dist/ipc.js';
 import { HOST } from '../dist/protocol.js';
+import { readHostRegistration } from '../dist/native-host-registry.js';
+
+const mac = process.platform === 'darwin';
+const launcherName = mac ? 'host.sh' : 'host.cmd';
 
 const chromeId = 'a'.repeat(32);
 const firefoxId = 'test@example.com';
@@ -24,6 +28,7 @@ const cli = fileURLToPath(new URL('../bin/cli.mjs', import.meta.url));
 // 文件使用隔离目录，注册表与权限脚本均用桩替代，不触碰真实宿主注册。
 function isolatedInstallation(t, { failRegistry, failDirectory } = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jtcrpa-install-test-'));
+    if (mac) t.mock.method(os, 'homedir', () => path.join(root, 'user'));
     const previousHome = process.env.JTCRPA_BRIDGE_HOME;
     process.env.JTCRPA_BRIDGE_HOME = root;
     const registry = new Map();
@@ -77,7 +82,7 @@ function isolatedInstallation(t, { failRegistry, failDirectory } = {}) {
 }
 
 function installedFiles(fixture) {
-    return ['host.cmd', 'installation.json', 'chrome.json', 'firefox.json', 'connections.json'].map((name) => {
+    return [launcherName, 'installation.json', 'chrome.json', 'firefox.json', 'connections.json'].map((name) => {
         const file = fixture.file(name);
         return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined;
     });
@@ -86,15 +91,22 @@ function installedFiles(fixture) {
 test('add writes exact launcher and browser-specific manifests, then uninstall removes owned registration', async (t) => {
     const fixture = isolatedInstallation(t);
     await manageHostRegistration('add', bothBrowsers);
-    assert.equal(fs.readFileSync(fixture.file('host.cmd'), 'utf8'), `@echo off\r\nchcp 65001 >nul\r\n"${process.execPath}" "${cli}" native-host "%~1" "%~2"\r\n`);
+    if (mac) {
+        for (const [vendor, name] of [['Google/Chrome', 'chrome'], ['Mozilla', 'firefox']]) {
+            const file = fixture.file(`user/Library/Application Support/${vendor}/NativeMessagingHosts/${HOST}.json`);
+            assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), fixture.read(name + '.json'));
+        }
+        for (const name of [launcherName, 'instances']) assert.equal(fs.statSync(fixture.file(name)).mode & 0o777, 0o700);
+    } else assert.equal(fs.readFileSync(fixture.file('host.cmd'), 'utf8'), `@echo off\r\nchcp 65001 >nul\r\n"${process.execPath}" "${cli}" native-host "%~1" "%~2"\r\n`);
     assert.deepEqual(fixture.read('installation.json'), { kinds: ['chrome', 'firefox'], node: process.execPath, cli });
-    const common = { name: HOST, description: 'Jiutouchong MCP bridge', path: fixture.file('host.cmd'), type: 'stdio' };
+    const common = { name: HOST, description: 'Jiutouchong MCP bridge', path: fixture.file(launcherName), type: 'stdio' };
     assert.deepEqual(fixture.read('chrome.json'), { ...common, allowed_origins: [`chrome-extension://${chromeId}/`] });
     assert.deepEqual(fixture.read('firefox.json'), { ...common, allowed_extensions: [firefoxId] });
-    assert.equal(fixture.registry.get(chromeKey), fixture.file('chrome.json'));
-    assert.equal(fixture.registry.get(firefoxKey), fixture.file('firefox.json'));
+    assert.equal(readHostRegistration('chrome'), fixture.file('chrome.json'));
+    assert.equal(readHostRegistration('firefox'), fixture.file('firefox.json'));
     await manageHostRegistration('uninstall', []);
-    assert.equal(fixture.registry.size, 0);
+    assert.equal(readHostRegistration('chrome'), undefined);
+    assert.equal(readHostRegistration('firefox'), undefined);
     assert.ok(installedFiles(fixture).every(contents => contents === undefined));
     assert.deepEqual(fixture.messages, ['Native host registered for chrome, firefox', 'Native host unregistered.']);
 });
@@ -108,7 +120,7 @@ test('add preserves earlier IDs, the other browser and registration order', asyn
     assert.deepEqual(fixture.read('installation.json').kinds, ['firefox', 'chrome']);
     assert.equal(fs.readFileSync(fixture.file('firefox.json'), 'utf8'), firefoxManifest);
     assert.deepEqual(fixture.read('chrome.json').allowed_origins, [`chrome-extension://${chromeId}/`, `chrome-extension://${'b'.repeat(32)}/`]);
-    assert.equal(fixture.registry.get(firefoxKey), fixture.file('firefox.json'));
+    assert.equal(readHostRegistration('firefox'), fixture.file('firefox.json'));
 });
 
 test('repeated add with a live connection only reads the existing registration', async (t) => {
@@ -157,7 +169,7 @@ test('invalid extension arguments fail before files or registration are changed'
     assert.deepEqual(fixture.commands, []);
 });
 
-test('add refuses to overwrite another installation', async (t) => {
+test('add refuses to overwrite another installation', { skip: process.platform !== 'win32' }, async (t) => {
     const fixture = isolatedInstallation(t);
     fixture.registry.set(chromeKey, fixture.file('another-host.json'));
     await assert.rejects(manageHostRegistration('add', bothBrowsers), /A different chrome host is registered/);
@@ -175,24 +187,25 @@ test('active instance prevents replacing the launcher and uninstalling', async (
     assert.ok(fixture.commands.every(([action]) => action === 'query'));
 });
 
-test('permission preparation failure does not write host files or registry', async (t) => {
+test('permission preparation failure does not write host files or registry', { skip: process.platform !== 'win32' }, async (t) => {
     const fixture = isolatedInstallation(t, { failDirectory: true });
     await assert.rejects(manageHostRegistration('add', bothBrowsers), { message: 'Directory permissions failed' });
     assert.ok(installedFiles(fixture).every(contents => contents === undefined));
     assert.ok(fixture.commands.every(([action]) => action === 'query'));
 });
 
-test('failed second registration removes the first registration and new host files', async (t) => {
+test('failed second registration removes the first registration and new host files', { skip: process.platform !== 'win32' }, async (t) => {
     const fixture = isolatedInstallation(t, {
         failRegistry: ([action, key]) => action === 'add' && key === firefoxKey ? 'Registration denied' : undefined,
     });
     await assert.rejects(manageHostRegistration('add', bothBrowsers), { message: 'Host registration failed: Registration denied' });
-    assert.equal(fixture.registry.size, 0);
+    assert.equal(readHostRegistration('chrome'), undefined);
+    assert.equal(readHostRegistration('firefox'), undefined);
     assert.ok(installedFiles(fixture).every(contents => contents === undefined));
     assert.deepEqual(fixture.messages, []);
 });
 
-test('failed upgrade restores existing file bytes and registrations', async (t) => {
+test('failed upgrade restores existing file bytes and registrations', { skip: process.platform !== 'win32' }, async (t) => {
     let failUpdate = false;
     const fixture = isolatedInstallation(t, {
         failRegistry: ([action, key]) => failUpdate && action === 'add' && key === firefoxKey ? 'Update denied' : undefined,
@@ -224,11 +237,11 @@ test('file write failure restores prior files before reporting the error', async
     await assert.rejects(manageHostRegistration('add', additions), { message: 'Manifest write failed' });
     assert.equal(failed, true);
     assert.deepEqual(installedFiles(fixture), before);
-    assert.equal(fixture.registry.get(chromeKey), fixture.file('chrome.json'));
-    assert.equal(fixture.registry.get(firefoxKey), fixture.file('firefox.json'));
+    assert.equal(readHostRegistration('chrome'), fixture.file('chrome.json'));
+    assert.equal(readHostRegistration('firefox'), fixture.file('firefox.json'));
 });
 
-test('uninstall preserves a registration taken over by another installation', async (t) => {
+test('uninstall preserves a registration taken over by another installation', { skip: process.platform !== 'win32' }, async (t) => {
     const fixture = isolatedInstallation(t);
     await manageHostRegistration('add', bothBrowsers);
     fixture.registry.set(chromeKey, fixture.file('another-host.json'));
@@ -237,7 +250,7 @@ test('uninstall preserves a registration taken over by another installation', as
     assert.ok(installedFiles(fixture).every(contents => contents === undefined));
 });
 
-test('uninstall reports registry removal failure and leaves that host recoverable', async (t) => {
+test('uninstall reports registry removal failure and leaves that host recoverable', { skip: process.platform !== 'win32' }, async (t) => {
     const fixture = isolatedInstallation(t, {
         failRegistry: ([action]) => action === 'delete' ? 'Removal denied' : undefined,
     });
@@ -344,7 +357,7 @@ test('uninstall rejects arguments before changing registrations, and reused numb
     for (const args of [['--help'], ['--unknown'], ['c1']]) {
         await assert.rejects(manageHostRegistration('uninstall', args), /does not accept arguments/);
         assert.deepEqual(installedFiles(fixture), original);
-        assert.equal(fixture.registry.get(chromeKey), fixture.file('chrome.json'));
+        assert.equal(readHostRegistration('chrome'), fixture.file('chrome.json'));
     }
     await manageHostRegistration('uninstall', []);
     await manageHostRegistration('add', ['--firefox-id', firefoxId]);
@@ -366,4 +379,31 @@ test('remove restores the connection record if its last grant cannot be withdraw
     });
     await assert.rejects(removeConnection(listConnections().connections[0]), /manifest busy/);
     assert.deepEqual(installedFiles(fixture), old);
+});
+
+test('macOS registration rolls back a partial install and preserves foreign manifests', { skip: !mac }, async t => {
+    const fixture = isolatedInstallation(t);
+    const support = fixture.file('user/Library/Application Support');
+    const chrome = path.join(support, 'Google/Chrome/NativeMessagingHosts', HOST + '.json');
+    const firefox = path.join(support, 'Mozilla/NativeMessagingHosts', HOST + '.json');
+    const symlink = fs.symlinkSync;
+    const failure = t.mock.method(fs, 'symlinkSync', (source, target) => {
+        if (target === firefox) throw new Error('Registration denied');
+        return symlink(source, target);
+    });
+    await assert.rejects(manageHostRegistration('add', bothBrowsers), /Registration denied/);
+    assert.equal(fs.lstatSync(chrome, { throwIfNoEntry: false }), undefined);
+    assert.ok(installedFiles(fixture).every(contents => contents === undefined));
+    failure.mock.restore();
+
+    fs.writeFileSync(firefox, 'another host');
+    await assert.rejects(manageHostRegistration('add', bothBrowsers), /different firefox host/);
+    assert.equal(fs.readFileSync(firefox, 'utf8'), 'another host');
+    fs.unlinkSync(firefox);
+    await manageHostRegistration('add', bothBrowsers);
+    fs.unlinkSync(chrome);
+    fs.symlinkSync(fixture.file('missing-foreign.json'), chrome);
+    await manageHostRegistration('uninstall', []);
+    assert.equal(fs.readlinkSync(chrome), fixture.file('missing-foreign.json'));
+    assert.equal(fs.lstatSync(firefox, { throwIfNoEntry: false }), undefined);
 });

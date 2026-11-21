@@ -10,13 +10,15 @@
 
 先在扩展的 **MCP 连接** 页面等到 **浏览器与本机程序已连接**。**注册当前浏览器** 的命令按浏览器使用 `add --chrome-id` 或 `add --firefox-id`，允许这个扩展和桥接器通信。**接入外部 AI** 生成的命令还包含这份浏览器配置的实例 ID。直接复制页面上的命令，两个 ID 都会自动带入各自的位置。
 
+在 macOS「终端」中，可用 `jtcrpa-mcp config --instance '实例UUID' --client codex` 生成当前 Mac 的配置。将引号里的值换成扩展页面的实例 UUID，按所用客户端选择 `codex`、`claude` 或 `deepseek`。使用 Codex 时，将生成的服务段放入 `~/.codex/config.toml`。另外两个客户端使用下表中的配置位置。
+
 | 你用哪个客户端 | 第一次接入怎么做 | 怎么知道已接通 |
 | --- | --- | --- |
-| Codex | 在扩展选 **Codex → 复制 Codex 接入命令**，整行粘贴到 PowerShell 执行。它用 `codex mcp add jtcrpa` 登记当前浏览器。在 PowerShell 运行 `codex mcp list`，然后打开新会话。 | 终端列表有 `jtcrpa`，在聊天中发送书店练习的第一条消息还能读到正确的书名和价格。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
-| Claude Code | 在扩展选 **Claude Code**，在 PowerShell 执行复制的配置生成命令。在项目根目录新建 `.mcp.json` 时可粘贴完整输出。已有文件则把输出中的 `jtcrpa` 条目加到现有 `mcpServers` 对象。 | 在这个项目里重新打开 Claude Code，按提示允许该项目服务，输入 `/mcp` 查看 `jtcrpa`，然后发送同一条书店测试消息。[Claude Code MCP 文档](https://code.claude.com/docs/en/mcp) |
-| DeepSeek Harness | 在扩展选 **DeepSeek Harness**，在 PowerShell 运行复制的命令。在 Harness Web 或 Desktop 的设置里添加 MCP 服务，名称填 `jtcrpa`，传输选 `stdio`，命令与参数逐项复制生成结果里 `config` 的 `command` 和 `args`。使用插件配置文件时，可直接把生成的 `mcp-jtcrpa` 条目加入插件列表。 | 用该配置重新启动 Harness，在对话里让它用 `mcp__jtcrpa__connection_ping` 原样返回 `bookshop`。[Harness 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [插件配置示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
+| Codex | 在扩展选 **Codex → 复制 Codex 接入命令**，整行粘贴到终端执行。它用 `codex mcp add jtcrpa` 登记当前浏览器。在终端运行 `codex mcp list`，然后打开新会话。 | 终端列表有 `jtcrpa`，在聊天中发送书店练习的第一条消息还能读到正确的书名和价格。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
+| Claude Code | 在扩展选 **Claude Code**，在终端执行复制的配置生成命令。在项目根目录新建 `.mcp.json` 时可粘贴完整输出。已有文件则把输出中的 `jtcrpa` 条目加到现有 `mcpServers` 对象。 | 在这个项目里重新打开 Claude Code，按提示允许该项目服务，输入 `/mcp` 查看 `jtcrpa`，然后发送同一条书店测试消息。[Claude Code MCP 文档](https://code.claude.com/docs/en/mcp) |
+| DeepSeek Harness | 在扩展选 **DeepSeek Harness**，在终端运行复制的命令。在 Harness Web 或 Desktop 的设置里添加 MCP 服务，名称填 `jtcrpa`，传输选 `stdio`，命令与参数逐项复制生成结果里 `config` 的 `command` 和 `args`。使用插件配置文件时，可直接把生成的 `mcp-jtcrpa` 条目加入插件列表。 | 用该配置重新启动 Harness，在对话里让它用 `mcp__jtcrpa__connection_ping` 原样返回 `bookshop`。[Harness 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [插件配置示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
 
-Codex 已通过 Chrome 和 Firefox 联调。Claude Code 和 DeepSeek Harness 已验证桥接器能生成上述配置，客户端内的完整采集尚待验证。
+Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试覆盖两种浏览器的宿主启动参数、握手和 MCP 调用。Claude Code 和 DeepSeek Harness 已验证桥接器能生成上述配置，客户端内的完整采集尚待验证。
 
 ### 书店示例的工具调用
 
@@ -59,16 +61,16 @@ Codex 已通过 Chrome 和 Firefox 联调。Claude Code 和 DeepSeek Harness 已
 
 ### 管理多个浏览器配置
 
-直接使用扩展页面生成的接入命令时，客户端绑定该浏览器配置的实例 UUID。需要同时接入多个配置时，为每个实例设置不同的 MCP 服务名。要通过登记编号管理连接，可在 PowerShell 运行以下命令。
+直接使用扩展页面生成的接入命令时，客户端绑定该浏览器配置的实例 UUID。需要同时接入多个配置时，为每个实例设置不同的 MCP 服务名。要通过登记编号管理连接，可在终端运行以下命令。
 
-```powershell
+```sh
 jtcrpa-mcp list
 jtcrpa-mcp list --json
 ```
 
 如果列表显示「待选择实例」，确认目标浏览器已开启 MCP，然后执行列表给出的 `add ... --instance ...` 命令。相同扩展 ID 的多个浏览器配置可以分别选择。选定后，用实际编号替换下面示例中的 `c1`。
 
-```powershell
+```sh
 jtcrpa-mcp config --connection c1 --client codex
 ```
 
@@ -79,12 +81,12 @@ jtcrpa-mcp config --connection c1 --client codex
 | 现象 | 处理 |
 | --- | --- |
 | 在侧边栏底部的设置菜单找不到「MCP 连接」 | 确认装的是九头虫 Agent。Chrome 和 Firefox 商店发布的 `2.0.2` 缺少此功能。如果已从官方取得支持 MCP 的 Chrome 压缩包，解压后在 `chrome://extensions` 打开「开发者模式」，点「加载已解压的扩展程序」并选择含 `manifest.json` 的目录。打开这份扩展的 MCP 页面，复制它自己的注册命令。[联系九头虫](https://jtcrpa.com/contact) |
-| `codex mcp list` 没有 `jtcrpa` | 从扩展的「接入外部 AI → Codex」重新复制完整命令，在准备运行 Codex 的同一 Windows 账户下执行，再打开新会话。 |
+| `codex mcp list` 没有 `jtcrpa` | 从扩展的「接入外部 AI → Codex」重新复制完整命令，在准备运行 Codex 的同一用户账户下执行，再打开新会话。 |
 | 能收到回声却找不到书店标签页 | 在已连接的浏览器配置中新开书店网页，再让 AI 列出标签页。已在安装扩展前打开的书店页可以刷新一次。 |
 | 已有 `runId`，聊天里没有任何行 | 用 `run_get` 查本次状态和 `savedRows`。失败时看最近日志。成功但写入 0 行时，检查目标标签页及抽取节点的 `dataset_name`，并重新试采。已有写入却找不到列时，先让 AI 用 `dataset_list` 核对数据集名称和 `fields`。 |
 | 写入请求超时 | 把原 `requestId` 传给 `connection_status` 核对请求状态。启动请求还可用 `run_get` 按 `workflowId` 查最近运行，再决定是否重试。 |
 | PowerShell 提示「禁止运行脚本」（`.ps1`） | 把当前命令开头的 `npm` 换成 `npm.cmd`，或把 `jtcrpa-mcp` 换成 `jtcrpa-mcp.cmd`，参数照写。例如 `jtcrpa-mcp.cmd list`。 |
-| 终端找不到 `jtcrpa-mcp` | 运行 `npm prefix -g` 查看全局命令目录。确认该目录已加入 `PATH`，重新打开终端后用 `jtcrpa-mcp --version` 检查。 |
+| 终端找不到 `jtcrpa-mcp` | 运行 `npm prefix -g` 查看全局命令目录。macOS 的命令目录是该路径下的 `bin`。确认命令目录已加入 `PATH`，重新打开终端后用 `jtcrpa-mcp --version` 检查。 |
 | npm 镜像提示找不到刚发布的包 | 直接从官方源安装，运行 `npm install --global jtcrpa-mcp --registry=https://registry.npmjs.org`。 |
 | `Access to the specified native messaging host is forbidden` | 从当前扩展的 MCP 页面重新复制注册命令，对照 `list` 的完整扩展 ID，运行命令后重新开启 MCP。开发版扩展换 ID 后也要登记新 ID。 |
 | 「本机通信接口尚未就绪」或提示需要权限 | 在浏览器扩展管理页重新加载九头虫，返回 MCP 页面开启连接，按提示允许本机通信。 |
@@ -97,7 +99,7 @@ jtcrpa-mcp config --connection c1 --client codex
 
 卸载前先关闭所有浏览器配置的 MCP 开关，再依次运行以下命令。第一条清理本安装的宿主登记和连接，第二条移除 npm 全局包。
 
-```powershell
+```sh
 jtcrpa-mcp uninstall
 npm uninstall --global jtcrpa-mcp
 ```
@@ -110,13 +112,15 @@ npm uninstall --global jtcrpa-mcp
 
 On the extension’s **MCP connection** page, wait for **Browser connected to the local program**. The **Register this browser** command uses `add --chrome-id` or `add --firefox-id` to let this extension communicate with the bridge. The client command under **Connect an AI app** includes the instance ID for this browser profile. Copy the commands from the page to use the right ID in each place.
 
+In macOS Terminal, run `jtcrpa-mcp config --instance 'instance-UUID' --client codex` to generate a configuration with local paths. Substitute the instance UUID from the extension page and choose `codex`, `claude` or `deepseek` for your client. For Codex, add the generated server section to `~/.codex/config.toml`. For the other clients, use the configuration locations below.
+
 | Client | What to do the first time | How to check |
 | --- | --- | --- |
-| Codex | In the extension, select **Codex → Copy Codex setup command**. Run the entire line in PowerShell. It uses `codex mcp add jtcrpa` to register the current profile. Run `codex mcp list` and open a new session. | Check for `jtcrpa` in the terminal list, then send the first bookshop message in chat and verify the title and price. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
-| Claude Code | Select **Claude Code** in the extension and run its configuration command in PowerShell. If your project has no `.mcp.json`, create one in its root and paste the full output. For an existing file, add the `jtcrpa` entry to its `mcpServers` object. | Reopen Claude Code in that project, approve the project server if prompted, enter `/mcp` and look for `jtcrpa`. Try the same bookshop message. [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) |
-| DeepSeek Harness | Select **DeepSeek Harness** and run the copied command in PowerShell. In Harness Web or Desktop Settings, add an MCP server named `jtcrpa`, select `stdio`, and copy `command` and each item in `args` from the generated `config`. For a plugin-based profile, add the generated `mcp-jtcrpa` entry to its plugin list. | Restart Harness with this configuration. Ask it to use `mcp__jtcrpa__connection_ping` to echo `bookshop`. [Harness settings](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [Plugin configuration example](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
+| Codex | In the extension, select **Codex → Copy Codex setup command**. Run the entire line in your terminal. It uses `codex mcp add jtcrpa` to register the current profile. Run `codex mcp list` and open a new session. | Check for `jtcrpa` in the terminal list, then send the first bookshop message in chat and verify the title and price. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
+| Claude Code | Select **Claude Code** in the extension and run its configuration command in your terminal. If your project has no `.mcp.json`, create one in its root and paste the full output. For an existing file, add the `jtcrpa` entry to its `mcpServers` object. | Reopen Claude Code in that project, approve the project server if prompted, enter `/mcp` and look for `jtcrpa`. Try the same bookshop message. [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) |
+| DeepSeek Harness | Select **DeepSeek Harness** and run the copied command in your terminal. In Harness Web or Desktop Settings, add an MCP server named `jtcrpa`, select `stdio`, and copy `command` and each item in `args` from the generated `config`. For a plugin-based profile, add the generated `mcp-jtcrpa` entry to its plugin list. | Restart Harness with this configuration. Ask it to use `mcp__jtcrpa__connection_ping` to echo `bookshop`. [Harness settings](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [Plugin configuration example](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
 
-The Codex integration has been tested with Chrome and Firefox. Bridge configuration generation has been verified for Claude Code and DeepSeek Harness. Full collection runs in those two clients are pending.
+The Windows Codex integration has been tested with Chrome and Firefox. Automated macOS tests cover the native host arguments for both browsers, the handshake and MCP calls. Bridge configuration generation has been verified for Claude Code and DeepSeek Harness. Full collection runs in those two clients are pending.
 
 ### Tool calls for the bookshop example
 
@@ -159,16 +163,16 @@ Supply exactly one of `datasetId` or `datasetName` to `dataset_read`. Pages star
 
 ### Manage multiple browser profiles
 
-The setup command from the extension binds the client to the instance UUID of that browser profile. Give each instance its own MCP service name when connecting several profiles. To manage connections by their registration number, run the following in PowerShell.
+The setup command from the extension binds the client to the instance UUID of that browser profile. Give each instance its own MCP service name when connecting several profiles. To manage connections by their registration number, run the following in your terminal.
 
-```powershell
+```sh
 jtcrpa-mcp list
 jtcrpa-mcp list --json
 ```
 
 If the list shows `待选择实例` (select an instance), enable MCP in the intended profile and run the `add ... --instance ...` command shown in the list. Profiles with the same extension ID can be selected separately. After selecting a target, substitute its connection number for `c1` in this example.
 
-```powershell
+```sh
 jtcrpa-mcp config --connection c1 --client codex
 ```
 
@@ -179,12 +183,12 @@ The supported client identifiers are `codex`, `claude` and `deepseek`. Omit `--c
 | Symptom | What to do |
 | --- | --- |
 | MCP connection is missing from the sidebar’s Settings menu | Check the extension name is Jiutouchong Agent. The Chrome and Firefox store releases of `2.0.2` lack this feature. If you received an MCP-enabled Chrome ZIP from Jiutouchong, extract it, open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and select the folder containing `manifest.json`. Open that extension’s MCP page and copy its own registration command. [Contact Jiutouchong](https://jtcrpa.com/en/contact) |
-| `codex mcp list` has no `jtcrpa` entry | Under **Connect an AI app → Codex**, copy the entire command. Run it under the same Windows account you use for Codex, then open a new session. |
+| `codex mcp list` has no `jtcrpa` entry | Under **Connect an AI app → Codex**, copy the entire command. Run it under the same user account you use for Codex, then open a new session. |
 | The echo works, but the bookshop tab is missing | Open the bookshop in the connected profile and ask the client to list tabs again. If the page was open before installing the extension, refresh it. |
 | You have a `runId` but see no rows | Use `run_get` to check the run’s status and `savedRows`. Read recent logs on failure. For a successful run with zero writes, check the tab and the extraction node’s `dataset_name`, then preview the extraction again. If rows were saved but a column is missing, use `dataset_list` to check the dataset name and `fields`. |
 | A write request timed out | Pass its original `requestId` to `connection_status` to inspect the request. For a start request, also query recent runs with `run_get` filtered by `workflowId` before retrying. |
 | PowerShell says running scripts is disabled (`.ps1`) | Replace `npm` with `npm.cmd`, or `jtcrpa-mcp` with `jtcrpa-mcp.cmd`, at the start of the command. Keep the same arguments, for example `jtcrpa-mcp.cmd list`. |
-| The terminal cannot find `jtcrpa-mcp` | Run `npm prefix -g` to locate the global command directory. Check that it is on your `PATH`, reopen the terminal and run `jtcrpa-mcp --version`. |
+| The terminal cannot find `jtcrpa-mcp` | Run `npm prefix -g` to locate the global command directory. On macOS the executables are in its `bin` subdirectory. Check that the executable directory is on your `PATH`, reopen the terminal and run `jtcrpa-mcp --version`. |
 | An npm mirror cannot find a newly published version | Install from the public registry with `npm install --global jtcrpa-mcp --registry=https://registry.npmjs.org`. |
 | `Access to the specified native messaging host is forbidden` | Copy the registration command from the current extension, check its complete ID against `list`, run the command and turn MCP on again. Register the new ID if a development build’s extension ID has changed. |
 | The native messaging interface is unavailable, or the browser requests permission | Reload Jiutouchong from the browser’s extensions page, enable the connection again and allow native messaging when prompted. |
@@ -197,7 +201,7 @@ For an in-place upgrade, turn MCP off, run `npm install --global jtcrpa-mcp@late
 
 To uninstall, first disable MCP in all connected browser profiles. The first command below removes this installation’s native host registrations and connections. The second removes the global npm package.
 
-```powershell
+```sh
 jtcrpa-mcp uninstall
 npm uninstall --global jtcrpa-mcp
 ```
