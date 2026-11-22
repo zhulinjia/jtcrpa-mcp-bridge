@@ -11,11 +11,20 @@ export async function verifySdkConnection(instanceId, expectedOnline, bridgeHome
         await client.connect(transport);
         assert.match(client.getInstructions() ?? '', /Keep the page open after saving/);
         const tools = await client.listTools();
-        assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'page_close', 'page_open', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
+        assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'capability_probe', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'page_close', 'page_open', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
         for (const name of ['page_probe', 'workflow_save', 'workflow_run', 'page_close']) {
             assert.ok(tools.tools.find(tool => tool.name === name).inputSchema.required.includes('pageRef'));
         }
         const contract = tools.tools.find((tool) => tool.name === 'workflow_contract');
+        const capability = tools.tools.find(tool => tool.name === 'capability_probe');
+        assert.equal(capability.annotations.readOnlyHint, true);
+        assert.deepEqual(capability.inputSchema.required, ['tool']);
+        assert.deepEqual(capability.inputSchema.properties.tool.enum, ['probeUserScript', 'probeFileAccess', 'probeFeishu']);
+        const probe = await client.callTool({ name: 'capability_probe', arguments: { tool: 'probeUserScript' } });
+        if (expectedOnline) assert.deepEqual(JSON.parse(probe.content[0].text), { status: 'READY' });
+        else assert.equal(probe.isError, true);
+        const invalidProbe = await client.callTool({ name: 'capability_probe', arguments: { tool: 'probeClick' } });
+        assert.equal(invalidProbe.isError, true);
         assert.equal(contract.inputSchema.properties.guideDetail, undefined);
         assert.ok(tools.tools.find((tool) => tool.name === 'workflow_save').description.includes('等待本次保存之后的明确确认'));
         assert.ok(tools.tools.find((tool) => tool.name === 'workflow_run').description.includes('等待本次保存之后的明确确认'));

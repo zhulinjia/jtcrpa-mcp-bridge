@@ -12,15 +12,16 @@ Codex CLI 用户在目标浏览器的扩展页开启 **MCP 连接** 并允许本
 
 macOS 上，Google Chrome 和 Microsoft Edge 都使用 `--chrome-id`。运行中的浏览器只有一个用户数据根目录时，`connect-codex` 使用该目录；有多个候选目录时，桥接器按扩展 ID 区分。也可在 `add` 或 `connect-codex` 末尾加 `--chrome-user-data-dir "/绝对路径/用户数据目录"`。在目标浏览器打开 `chrome://version` 或 `edge://version`，使用「个人资料路径」上一级、含 `Local State` 的目录。开发工具重新创建临时目录后，从新实例再次运行接入命令。
 
-使用 Claude Code 或 DeepSeek Harness 时，在所选客户端面板复制浏览器注册和配置命令。Windows PowerShell 与 macOS 终端会看到对应的命令。
+使用 Claude Code、DeepSeek Harness 或 WorkBuddy 时，在所选客户端面板复制浏览器注册和配置命令。Windows PowerShell 与 macOS 终端会看到对应的命令。
 
 | 你用哪个客户端 | 第一次接入怎么做 | 怎么知道已接通 |
 | --- | --- | --- |
 | Codex | 在终端运行扩展的 `connect-codex` 命令。登记完成后命令显示服务名并退出。Codex 加载配置后，在自己的对话中使用该服务。 | 扩展显示此浏览器已就绪，实际任务返回后显示 Codex 最近访问时间。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
 | Claude Code | 在扩展选 **Claude Code**，在终端执行复制的配置生成命令。在项目根目录新建 `.mcp.json` 时可粘贴完整输出。已有文件则把输出中的 `jtcrpa` 条目加到现有 `mcpServers` 对象。 | 在这个项目里重新打开 Claude Code，按提示允许该项目服务，输入 `/mcp` 查看 `jtcrpa`，然后发送同一条书店测试消息。[Claude Code MCP 文档](https://code.claude.com/docs/en/mcp) |
 | DeepSeek Harness | 在扩展选 **DeepSeek Harness**，在终端运行复制的命令。在 Harness Web 或 Desktop 的设置里添加 MCP 服务，名称填 `jtcrpa`，传输选 `stdio`，命令与参数逐项复制生成结果里 `config` 的 `command` 和 `args`。使用插件配置文件时，可直接把生成的 `mcp-jtcrpa` 条目加入插件列表。 | 用该配置重新启动 Harness，在对话里让它用 `mcp__jtcrpa__connection_ping` 原样返回 `bookshop`。[Harness 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [插件配置示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
+| WorkBuddy 桌面端 | 在扩展选 **WorkBuddy**，注册目标浏览器并运行配置生成命令。命令末尾的 `--client claude` 会导出 WorkBuddy 支持的 `mcpServers` JSON。在 WorkBuddy 的「连接器 → 自定义连接器」添加并保存生成的服务。编辑已有配置时，把服务加入现有 `mcpServers`，遇到同名条目就为新服务换名。 | 在 WorkBuddy 对话中输入「用九头虫读取当前标签页的标题」，核对返回的标题。[WorkBuddy 连接器文档](https://cloud.tencent.com/document/product/1831/134525) |
 
-Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试覆盖两种浏览器的宿主启动参数、握手和 MCP 调用。Claude Code 和 DeepSeek Harness 已验证桥接器能生成上述配置，客户端内的完整采集尚待验证。
+Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试覆盖两种浏览器的宿主启动参数、握手和 MCP 调用。Claude Code、DeepSeek Harness 和 WorkBuddy 已验证配置生成，客户端内的完整采集尚待验证。
 
 ### 书店示例的工具调用
 
@@ -127,8 +128,9 @@ On macOS, Google Chrome and Microsoft Edge both use `--chrome-id`. When the runn
 | Codex | Run the extension’s `connect-codex` command. It prints the registered server name and exits. Use that server in your own conversation once Codex loads the configuration. | The extension shows readiness and the time of the last real Codex access. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
 | Claude Code | Select **Claude Code** in the extension and run its configuration command in your terminal. If your project has no `.mcp.json`, create one in its root and paste the full output. For an existing file, add the `jtcrpa` entry to its `mcpServers` object. | Reopen Claude Code in that project, approve the project server if prompted, enter `/mcp` and look for `jtcrpa`. Try the same bookshop message. [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) |
 | DeepSeek Harness | Select **DeepSeek Harness** and run the copied command in your terminal. In Harness Web or Desktop Settings, add an MCP server named `jtcrpa`, select `stdio`, and copy `command` and each item in `args` from the generated `config`. For a plugin-based profile, add the generated `mcp-jtcrpa` entry to its plugin list. | Restart Harness with this configuration. Ask it to use `mcp__jtcrpa__connection_ping` to echo `bookshop`. [Harness settings](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [Plugin configuration example](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
+| WorkBuddy Desktop | Select **WorkBuddy** in the extension. Register the target browser and run the configuration command. Its `--client claude` option exports the `mcpServers` JSON accepted by WorkBuddy. In WorkBuddy, open **Connectors → Custom connectors**, add the generated server and save. For existing configurations, add the entry under `mcpServers`, choosing a new name if needed. | Ask WorkBuddy to use Jiutouchong to read the current tab title and check the result. [WorkBuddy connector guide](https://cloud.tencent.com/document/product/1831/134525) |
 
-The Windows Codex integration has been tested with Chrome and Firefox. Automated macOS tests cover the native host arguments for both browsers, the handshake and MCP calls. Bridge configuration generation has been verified for Claude Code and DeepSeek Harness. Full collection runs in those two clients are pending.
+The Windows Codex integration has been tested with Chrome and Firefox. Automated macOS tests cover the native host arguments for both browsers, the handshake and MCP calls. Bridge configuration generation has been verified for Claude Code, DeepSeek Harness and WorkBuddy. Full collection runs in these clients are pending.
 
 ### Tool calls for the bookshop example
 

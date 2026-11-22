@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import { pageTargetFields, type ForwardedToolDefinition } from './definition.ts';
 
-const probeNames = [
+const pageProbeNames = [
     'snapshot',
     'queryFrames',
     'probeElement',
@@ -9,6 +9,7 @@ const probeNames = [
     'probeClick',
     'probeScroll',
 ] as const;
+const capabilityProbeNames = ['probeUserScript', 'probeFileAccess', 'probeFeishu'] as const;
 
 export const authoringTools: ForwardedToolDefinition[] = [
     {
@@ -42,8 +43,15 @@ export const authoringTools: ForwardedToolDefinition[] = [
         schema: z.object({
             includeGuide: z.boolean().optional(),
             nodeTools: z.array(z.string()).max(6).optional(),
-            probeTools: z.array(z.enum(probeNames)).max(6).optional(),
+            probeTools: z.array(z.enum([...pageProbeNames, ...capabilityProbeNames])).max(6).optional(),
         }),
+        readOnly: true,
+        openWorld: false,
+    },
+    {
+        name: 'capability_probe',
+        description: '检查绑定实例的用户脚本权限、本地文件读取能力或飞书凭据配置。仅查指定项，无需标签页。READY 只确认对应的本机条件；BLOCKED 按原因处理。检查失败时权限未知。设置改变后重新检查。',
+        schema: z.object({ tool: z.enum(capabilityProbeNames) }).strict(),
         readOnly: true,
         openWorld: false,
     },
@@ -54,7 +62,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
             '点击和滚动会真实操作页面，必须提供 requestId，且探测范围须在用户授权之内。' +
             'clean 通过现有沙箱执行。不提供任意 RPC 或 JavaScript 求值接口。',
         schema: z.object({
-            tool: z.enum(probeNames),
+            tool: z.enum(pageProbeNames),
             ...pageTargetFields,
             frameId: z.number().int().nonnegative().optional(),
             params: z.record(z.string(), z.unknown()).optional(),

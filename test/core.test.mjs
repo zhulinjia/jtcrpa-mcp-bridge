@@ -70,6 +70,11 @@ async function verifyNativeHost(t, kind) {
             if (message.type === 'error') reject(new Error(message.error));
             if (message.type === 'connected') resolve();
             if (message.type === 'request') {
+                if (message.method === 'capability_probe') {
+                    assert.deepEqual(message.params, { tool: 'probeUserScript' });
+                    child.stdin.write(nativeFrame({ type: 'response', version: 1, id: message.id, ok: true, result: { status: 'READY' } }));
+                    return;
+                }
                 const result = message.method === 'connection_status'
                     ? { instanceId: id, connected: true }
                     : { instanceId: id, text: message.params.text };

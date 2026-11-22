@@ -44,6 +44,8 @@ async function forwardToolCall(
             failure.message = (binding?.label || '目标浏览器') + '已离线。请在该浏览器中开启九头虫 MCP。';
         } else if (failure.error === 'CONNECTION_INSTANCE_MISMATCH' || failure.error === 'CONNECTION_REMOVED') {
             failure.message = '原浏览器绑定已变更，请从目标浏览器重新接入。';
+        } else if (failure.error === 'UNKNOWN_METHOD' && definition.name === 'capability_probe') {
+            failure.message = '当前连接缺少能力检查工具，权限状态未知。请配套更新九头虫扩展和本机桥接器。';
         } else if (failure.error === 'UNKNOWN_METHOD' && (definition.name === 'page_open' || definition.name === 'page_close')) {
             failure.message = '当前连接尚未提供此页面工具。请配套更新目标浏览器中的九头虫扩展和本机桥接器。';
         } else if (!definition.readOnly) {

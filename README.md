@@ -23,7 +23,7 @@
    此 Codex CLI 流程需要支持浏览器实例绑定的扩展和 0.5.1 或更高版本的桥接器。开发测试可在本仓库运行 `npm run build` 后使用 `npm pack` 生成的本地安装包。
 
 3. **连接你要用的浏览器。** 在该浏览器的 **MCP 连接** 页面打开 **开启 MCP 连接** 开关，按提示允许本机通信，然后选择 **Codex** 查看首次接入命令。
-4. **登记 MCP 服务。** 将页面给出的整条命令粘贴到终端运行。命令核对目标浏览器后，显示浏览器名称和 MCP 服务名，然后退出。Codex 加载这项配置后，你可以在自己的对话里提出任务。首次访问后，扩展会显示访问时间。要使用另一份浏览器配置，从那份配置的扩展页接入。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code 或 DeepSeek Harness](docs/usage.md#客户端配置)
+4. **登记 MCP 服务。** 将页面给出的整条命令粘贴到终端运行。命令核对目标浏览器后，显示浏览器名称和 MCP 服务名，然后退出。Codex 加载这项配置后，你可以在自己的对话里提出任务。首次访问后，扩展会显示访问时间。要使用另一份浏览器配置，从那份配置的扩展页接入。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code、DeepSeek Harness 或 WorkBuddy](docs/usage.md#客户端配置)
 
 ### 第一次用 MCP 采集书名和价格
 
@@ -77,7 +77,7 @@
    This Codex CLI flow requires an extension that supports browser instance binding and bridge version 0.5.1 or later. To test a development checkout, run `npm run build` and install the local package produced by `npm pack`.
 
 3. **Connect the browser you want to use.** In that profile, open **MCP connection**, turn on the connection switch and allow native messaging when prompted. Select **Codex** to see the first-time setup command.
-4. **Register the MCP server.** Run the setup command in your terminal. It verifies the target browser, prints its display name and MCP server name, then exits. Once Codex has loaded the configuration, enter your task in your own conversation. The extension shows the time of the first access. To use another profile, start from its extension page. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code or DeepSeek Harness](docs/usage.md#client-configuration)
+4. **Register the MCP server.** Run the setup command in your terminal. It verifies the target browser, prints its display name and MCP server name, then exits. Once Codex has loaded the configuration, enter your task in your own conversation. The extension shows the time of the first access. To use another profile, start from its extension page. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code, DeepSeek Harness or WorkBuddy](docs/usage.md#client-configuration)
 
 ### Collect your first four books
 
