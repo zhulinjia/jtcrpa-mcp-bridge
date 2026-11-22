@@ -19,8 +19,7 @@ export function registerForwardedTools(
                 openWorldHint: definition.openWorld,
             },
         }, (params) => {
-            const source = typeof target !== 'string' && target.expectedInstanceId &&
-                /(?:^|[^a-z])codex(?:[^a-z]|$)/i.test(server.server.getClientVersion()?.name ?? '')
+            const source = typeof target !== 'string' && target.expectedInstanceId
                 ? { ...target, reportCodexAccess: true } : target;
             return forwardToolCall(source, definition, params);
         });

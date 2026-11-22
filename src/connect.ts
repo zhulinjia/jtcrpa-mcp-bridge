@@ -3,8 +3,7 @@ import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
 import { addConnection, connectionFile, connectionName, readConnections } from './connections.ts';
-import { configureServer } from './codex-client.ts';
-import { manageHostRegistration } from './install.ts';
+import { boundClientConfig, manageHostRegistration } from './install.ts';
 import { callExtension } from './ipc.ts';
 import { readDiscovery } from './paths.ts';
 import { validInstance } from './protocol.ts';
@@ -32,13 +31,13 @@ async function waitForBrowser(target: BrowserTarget, instanceId: string, ticket:
     }
 }
 
-export async function connectCodex(args: string[]) {
+export async function connect(args: string[]) {
     const { values } = parseArgs({ args, options: { 'chrome-user-data-dir': { type: 'string' }, 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' },
         instance: { type: 'string' }, setup: { type: 'string' } } });
     const chrome = values['chrome-id'], firefox = values['firefox-id'];
     const { instance: instanceId, setup: ticket } = values;
     if (Boolean(chrome) === Boolean(firefox) || !validInstance(instanceId) || !validInstance(ticket)) {
-        throw new Error('请从目标浏览器复制完整的 Codex 接入命令。');
+        throw new Error('请从目标浏览器复制完整的接入命令。');
     }
     const target: BrowserTarget = chrome ? { kind: 'chrome', extensionId: chrome } : { kind: 'firefox', extensionId: firefox! };
     checkExtensionId(target.kind, target.extensionId);
@@ -46,27 +45,25 @@ export async function connectCodex(args: string[]) {
     const directory = values['chrome-user-data-dir'];
     if (directory !== undefined) registration.push('--chrome-user-data-dir', directory);
     await manageHostRegistration('add', registration, { fromRunningBrowser: true });
-    console.log('正在等待发起接入的浏览器…');
-    const setup = await bindCodexBrowser(target, instanceId, ticket);
-    console.log(setup.displayName + ' 已就绪。Codex MCP 服务名为 ' + setup.name);
+    console.error('正在等待发起接入的浏览器…');
+    const setup = await bindBrowser(target, instanceId, ticket);
+    console.log(JSON.stringify(setup.config, null, 2));
 }
 
-export async function bindCodexBrowser(target: BrowserTarget, instanceId: string, ticket: string) {
+export async function bindBrowser(target: BrowserTarget, instanceId: string, ticket: string) {
     const label = await waitForBrowser(target, instanceId, ticket);
     const setup = await withRegistrationLock(() => {
         const store = readConnections();
         const connection = addConnection(store, target, instanceId);
         connection.bindingId ??= randomUUID();
-        // A retry after a Codex/config write failure must reuse this exact binding.
-        replaceFile(connectionFile(), JSON.stringify(store));
-        const name = configureServer(connection.bindingId, instanceId, target.kind + '_' + connection.id, connection.codexServer);
-        connection.codexServer = name;
+        const name = connection.serverName ?? connection.codexServer ?? 'jtcrpa_' + target.kind + '_' + connection.id;
+        connection.serverName = name;
         connection.label = label || undefined;
         replaceFile(connectionFile(), JSON.stringify(store));
         const displayName = connectionName(connection);
-        return { name, displayName, bindingId: connection.bindingId };
+        return { name, displayName, bindingId: connection.bindingId, config: boundClientConfig(name, connection.bindingId, instanceId) };
     });
     await callExtension({ bindingId: setup.bindingId, expectedInstanceId: instanceId }, 'codex_setup',
-        { ticket, bindingId: setup.bindingId, displayName: setup.displayName, serverName: setup.name });
+        { ticket, bindingId: setup.bindingId, displayName: setup.displayName, serverName: setup.name, config: setup.config });
     return setup;
 }

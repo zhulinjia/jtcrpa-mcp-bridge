@@ -10,7 +10,9 @@ export async function verifySdkConnection(instanceId, expectedOnline, bridgeHome
     try {
         await client.connect(transport);
         assert.match(client.getInstructions() ?? '', /Keep the page open after saving/);
+        assert.match(client.getInstructions() ?? '', /滚动加载/);
         const tools = await client.listTools();
+        assert.ok(tools.tools.every(tool => tool.description?.trim()));
         assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'capability_probe', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'page_close', 'page_open', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
         for (const name of ['page_probe', 'workflow_save', 'workflow_run', 'page_close']) {
             assert.ok(tools.tools.find(tool => tool.name === name).inputSchema.required.includes('pageRef'));

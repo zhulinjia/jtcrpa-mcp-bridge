@@ -39,6 +39,11 @@ interface InstallationBackup {
     registrations: Map<BrowserKind, string | undefined>;
 }
 
+export function boundClientConfig(name: string, bindingId: string, instanceId: string) {
+    const args = [cli, 'mcp', '--connection', bindingId, '--expect-instance', instanceId];
+    return { mcpServers: { [name]: { type: 'stdio', command: process.execPath, args } } };
+}
+
 export async function clientConfig(target: string) {
     const byConnection = validConnectionId(target);
     if (!byConnection && !validInstance(target)) throw new Error('INVALID_INSTANCE_ID');
@@ -63,12 +68,14 @@ export async function manageHostRegistration(command: 'add' | 'uninstall', args:
         if (command === 'uninstall') uninstallNativeHost(paths);
         else {
             const { targets, instanceId, chromeDataDir } = parseBrowserTargets(args, fromRunningBrowser);
-            addNativeHost(paths, targets, instanceId, chromeDataDir);
+            const message = addNativeHost(paths, targets, instanceId, chromeDataDir);
+            if (fromRunningBrowser) console.error(message);
+            else console.log(message);
         }
     });
 }
 
-function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], instanceId?: string, chromeDataDir?: string): void {
+function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], instanceId?: string, chromeDataDir?: string): string {
     if (process.platform === 'win32' && /["%\r\n]/.test(cli + process.execPath + paths.root)) throw new Error('Unsupported character in installation path');
     const backup = captureInstallationBackup(paths, targets, chromeDataDir);
     const previous = fs.existsSync(paths.record) ? readInstallationRecord(paths.record) : { kinds: [] };
@@ -84,7 +91,7 @@ function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], insta
     files.set(connectionFile(), JSON.stringify(store));
     const browsers = targets.map(target => target.kind).join(', ');
     const changed = commitRegistration(paths, backup, files, register);
-    console.log((changed ? 'Native host registered for ' : 'Native host already registered for ') + browsers);
+    return (changed ? 'Native host registered for ' : 'Native host already registered for ') + browsers;
 }
 
 export async function removeConnection(expected: Connection): Promise<void> {

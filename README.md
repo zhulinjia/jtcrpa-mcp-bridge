@@ -8,7 +8,7 @@
 
 ### 首次连接
 
-1. **浏览器里找到 MCP 入口。** 在 macOS 或 Windows 上将**九头虫 Agent** 添加到 Chrome 或 Firefox。点击浏览器工具栏的九头虫图标打开侧边栏，再点底部的 **设置菜单 ☰ → MCP 连接**。打开页面后应能看到 **开启 MCP 连接** 开关。[设置菜单截图](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-zh.png) · [扩展安装说明](https://doc.jtcrpa.com/guide/install.html)
+1. **浏览器里找到 MCP 入口。** 在 macOS 或 Windows 上将**九头虫 Agent** 添加到 Edge、Chrome 或 Firefox。点击浏览器工具栏的九头虫图标打开侧边栏，再点底部的 **设置菜单 ☰ → MCP 连接**。打开页面后应能看到 **开启 MCP 连接** 开关。[设置菜单截图](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-zh.png) · [扩展安装说明](https://doc.jtcrpa.com/guide/install.html)
 
    如果菜单里没有这个入口，先确认扩展版本。Chrome 和 Firefox 商店发布的 `2.0.2` 都缺少 MCP。只有商店版时，可向九头虫咨询支持 MCP 的安装包。[联系九头虫](https://jtcrpa.com/contact)
 
@@ -20,10 +20,10 @@
    jtcrpa-mcp --version
    ```
 
-   此 Codex CLI 流程需要支持浏览器实例绑定的扩展和 0.5.1 或更高版本的桥接器。开发测试可在本仓库运行 `npm run build` 后使用 `npm pack` 生成的本地安装包。
+   下述流程使用桥接器 0.8.0+ 和配套扩展。开发测试可使用本仓库的 `npm pack` 安装包。
 
-3. **连接你要用的浏览器。** 在该浏览器的 **MCP 连接** 页面打开 **开启 MCP 连接** 开关，按提示允许本机通信，然后选择 **Codex** 查看首次接入命令。
-4. **登记 MCP 服务。** 将页面给出的整条命令粘贴到终端运行。命令核对目标浏览器后，显示浏览器名称和 MCP 服务名，然后退出。Codex 加载这项配置后，你可以在自己的对话里提出任务。首次访问后，扩展会显示访问时间。要使用另一份浏览器配置，从那份配置的扩展页接入。[安装 Codex CLI](https://developers.openai.com/codex/cli/) · [使用 Claude Code、DeepSeek Harness 或 WorkBuddy](docs/usage.md#客户端配置)
+3. **绑定当前浏览器。** 在 **MCP 连接** 页面开启连接，允许本机通信。复制页面给出的整条 `jtcrpa-mcp connect` 命令，在终端运行。
+4. **把配置交给 AI。** 回到插件页点击 **复制 MCP 配置**，将 JSON 发给支持本机 stdio 的 AI 客户端，请它添加这项服务。终端也会输出同一份 JSON。要添加其他浏览器，从对应浏览器的插件页重复操作。[客户端配置说明](docs/usage.md#客户端配置)
 
 ### 第一次用 MCP 采集书名和价格
 
@@ -62,7 +62,7 @@
 
 ### First-time setup
 
-1. **Find MCP in the browser.** On macOS or Windows, add **Jiutouchong Agent** to Chrome or Firefox. Click its toolbar icon to open the sidebar, then choose **Settings ☰ → MCP connection** at the bottom. Look for the **Enable MCP connection** switch. [See the Settings menu](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-en.png) · [Extension installation guide](https://doc.jtcrpa.com/en/guide/install.html)
+1. **Find MCP in the browser.** On macOS or Windows, add **Jiutouchong Agent** to Edge, Chrome or Firefox. Click its toolbar icon to open the sidebar, then choose **Settings ☰ → MCP connection** at the bottom. Look for the **Enable MCP connection** switch. [See the Settings menu](https://github.com/zhulinjia/jtcrpa-mcp-bridge/blob/main/docs/images/settings-menu-en.png) · [Extension installation guide](https://doc.jtcrpa.com/en/guide/install.html)
 
    If the menu entry is missing, check the extension build. Version `2.0.2` from both browser stores lacks MCP. If you only have the store release, contact Jiutouchong about an MCP-enabled build. [Contact Jiutouchong](https://jtcrpa.com/en/contact)
 
@@ -74,10 +74,10 @@
    jtcrpa-mcp --version
    ```
 
-   This Codex CLI flow requires an extension that supports browser instance binding and bridge version 0.5.1 or later. To test a development checkout, run `npm run build` and install the local package produced by `npm pack`.
+   These steps require bridge 0.8.0 or later and a matching extension. For a development checkout, install the local package produced by `npm pack`.
 
-3. **Connect the browser you want to use.** In that profile, open **MCP connection**, turn on the connection switch and allow native messaging when prompted. Select **Codex** to see the first-time setup command.
-4. **Register the MCP server.** Run the setup command in your terminal. It verifies the target browser, prints its display name and MCP server name, then exits. Once Codex has loaded the configuration, enter your task in your own conversation. The extension shows the time of the first access. To use another profile, start from its extension page. [Install the Codex CLI](https://developers.openai.com/codex/cli/) · [Use Claude Code, DeepSeek Harness or WorkBuddy](docs/usage.md#client-configuration)
+3. **Bind the browser.** In the target profile, enable **MCP connection**, allow native messaging and run the full `jtcrpa-mcp connect` command shown on the page.
+4. **Copy the configuration.** Click **Copy MCP configuration** and ask your AI to add the JSON to its local stdio client settings. The terminal prints the same JSON. Repeat from another browser profile to add that profile. [Client configuration](docs/usage.md#client-configuration)
 
 ### Collect your first four books
 

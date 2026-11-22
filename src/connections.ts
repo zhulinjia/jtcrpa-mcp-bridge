@@ -7,7 +7,7 @@ import { validInstance } from './protocol.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { replaceFile } from './registration-files.ts';
 
-export interface Connection extends BrowserTarget { id: string; instanceId: string | null; bindingId?: string; codexServer?: string; label?: string }
+export interface Connection extends BrowserTarget { id: string; instanceId: string | null; bindingId?: string; serverName?: string; codexServer?: string; label?: string }
 interface Observation extends BrowserTarget { instanceId: string }
 export interface ConnectionStore { nextId: number; connections: Connection[]; observed: Observation[] }
 
@@ -103,7 +103,7 @@ export function listConnections(live = listRunningHosts(), uncertain: ReadonlySe
         const status: 'online' | 'unconfirmed' | 'offline' = selected.some(item => item.online) ? 'online'
             : awaitingHandshake || selected.some(item => item.online === null) ? 'unconfirmed' : 'offline';
         const { id, kind, extensionId, instanceId, bindingId, label, codexServer } = record;
-        return { id, kind, extensionId, instanceId, bindingId, label, codexServer, status, candidates };
+        return { id, kind, extensionId, instanceId, bindingId, label, codexServer, serverName: record.serverName ?? codexServer, status, candidates };
     });
     return { connections, unconfirmedInstances: unconfirmed.map(host => host.instanceId) };
 }

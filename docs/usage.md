@@ -8,20 +8,11 @@
 
 ### 客户端配置
 
-Codex CLI 用户在目标浏览器的扩展页开启 **MCP 连接** 并允许本机通信，再运行 **Codex** 面板显示的首次接入命令。命令包含当前扩展和实例的信息，会自动完成注册。
+在目标浏览器的 **MCP 连接** 页开启连接并允许本机通信，复制页面上的 `connect` 命令，在本机终端执行。桥接器注册宿主，核验接入凭据，把这份浏览器配置绑定到稳定的服务名和实例。
 
-macOS 上，Google Chrome 和 Microsoft Edge 都使用 `--chrome-id`。运行中的浏览器只有一个用户数据根目录时，`connect-codex` 使用该目录；有多个候选目录时，桥接器按扩展 ID 区分。也可在 `add` 或 `connect-codex` 末尾加 `--chrome-user-data-dir "/绝对路径/用户数据目录"`。在目标浏览器打开 `chrome://version` 或 `edge://version`，使用「个人资料路径」上一级、含 `Local State` 的目录。开发工具重新创建临时目录后，从新实例再次运行接入命令。
+插件页的 **复制 MCP 配置** 和终端输出提供同一份 JSON。可将它交给 AI，请它在支持本机 stdio 的客户端添加该服务，保留现有服务。接受 `mcpServers` 的客户端可直接合并该条目。其他配置格式沿用生成的服务名、`command` 和完整的 `args` 数组。路径属于运行桥接器的这台电脑。配置生效后，可让 AI 用九头虫读取当前页面，或调用 `connection_ping` 核对实例。
 
-使用 Claude Code、DeepSeek Harness 或 WorkBuddy 时，在所选客户端面板复制浏览器注册和配置命令。Windows PowerShell 与 macOS 终端会看到对应的命令。
-
-| 你用哪个客户端 | 第一次接入怎么做 | 怎么知道已接通 |
-| --- | --- | --- |
-| Codex | 在终端运行扩展的 `connect-codex` 命令。登记完成后命令显示服务名并退出。Codex 加载配置后，在自己的对话中使用该服务。 | 扩展显示此浏览器已就绪，实际任务返回后显示 Codex 最近访问时间。[Codex MCP 文档](https://developers.openai.com/codex/mcp/) |
-| Claude Code | 在扩展选 **Claude Code**，在终端执行复制的配置生成命令。在项目根目录新建 `.mcp.json` 时可粘贴完整输出。已有文件则把输出中的 `jtcrpa` 条目加到现有 `mcpServers` 对象。 | 在这个项目里重新打开 Claude Code，按提示允许该项目服务，输入 `/mcp` 查看 `jtcrpa`，然后发送同一条书店测试消息。[Claude Code MCP 文档](https://code.claude.com/docs/en/mcp) |
-| DeepSeek Harness | 在扩展选 **DeepSeek Harness**，在终端运行复制的命令。在 Harness Web 或 Desktop 的设置里添加 MCP 服务，名称填 `jtcrpa`，传输选 `stdio`，命令与参数逐项复制生成结果里 `config` 的 `command` 和 `args`。使用插件配置文件时，可直接把生成的 `mcp-jtcrpa` 条目加入插件列表。 | 用该配置重新启动 Harness，在对话里让它用 `mcp__jtcrpa__connection_ping` 原样返回 `bookshop`。[Harness 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [插件配置示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
-| WorkBuddy 桌面端 | 在扩展选 **WorkBuddy**，注册目标浏览器并运行配置生成命令。命令末尾的 `--client claude` 会导出 WorkBuddy 支持的 `mcpServers` JSON。在 WorkBuddy 的「连接器 → 自定义连接器」添加并保存生成的服务。编辑已有配置时，把服务加入现有 `mcpServers`，遇到同名条目就为新服务换名。 | 在 WorkBuddy 对话中输入「用九头虫读取当前标签页的标题」，核对返回的标题。[WorkBuddy 连接器文档](https://cloud.tencent.com/document/product/1831/134525) |
-
-Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试覆盖两种浏览器的宿主启动参数、握手和 MCP 调用。Claude Code、DeepSeek Harness 和 WorkBuddy 已验证配置生成，客户端内的完整采集尚待验证。
+macOS 上，Google Chrome 和 Microsoft Edge 都使用 `--chrome-id`。运行中的浏览器只有一个用户数据根目录时，`connect` 使用该目录；有多个候选目录时，桥接器按扩展 ID 区分。也可在 `add` 或 `connect` 末尾加 `--chrome-user-data-dir "/绝对路径/用户数据目录"`。在目标浏览器打开 `chrome://version` 或 `edge://version`，使用「个人资料路径」上一级、含 `Local State` 的目录。开发工具重新创建临时目录后，从新实例再次运行接入命令。
 
 ### 书店示例的工具调用
 
@@ -66,14 +57,14 @@ Windows 上的 Codex 已通过 Chrome 和 Firefox 联调。macOS 自动化测试
 
 ### 管理多个浏览器配置
 
-每份浏览器配置有自己的 MCP 服务名，例如 Chrome 连接 `c2` 对应 `jtcrpa_chrome_c2`。名称被占用时会追加 `_2`、`_3` 等编号。再次运行接入命令时，带八位绑定 ID 后缀的旧默认服务会换成短名，有自定义设置的服务保留原名。多份配置同时在线时，可以在任务里指明「Chrome c2」，各服务始终指向登记的浏览器。要按编号查看和管理连接，可在终端运行以下命令。
+每份浏览器配置有自己的 MCP 服务名，例如 Chromium 系浏览器连接 `c2` 的默认名称为 `jtcrpa_chrome_c2`。重复接入沿用原名与绑定。合并时若客户端已有同名条目指向其他浏览器，可为新条目换名。以下命令按编号管理连接。
 
 ```sh
 jtcrpa-mcp list
 jtcrpa-mcp list --json
 ```
 
-Codex 用户看到「待选择实例」时，在目标浏览器开启 **MCP 连接**，运行 **Codex** 面板显示的接入命令。桥接器会自动选定该实例，即使有多个配置使用同一扩展 ID。
+看到「待选择实例」时，在目标浏览器开启 **MCP 连接**，执行插件页显示的接入命令。
 
 手动管理旧配置或其他客户端时，可以运行列表给出的 `add ... --instance ...` 命令，再用实际登记编号生成配置。例如，为 Claude Code 导出 `c1` 的配置可以运行下面的命令。
 
@@ -117,20 +108,11 @@ npm uninstall --global jtcrpa-mcp
 
 ### Client configuration
 
-For the Codex CLI, turn on **MCP connection** in the target browser, allow native messaging and run the command shown under **Codex**. It includes the extension and instance identifiers and handles registration.
+In the target browser profile, enable **MCP connection**, allow native messaging, then copy and run the full `connect` command in a local terminal. The bridge registers the native host and verifies the setup ticket and instance.
 
-For Claude Code or DeepSeek Harness, use the browser registration and client configuration commands from the selected client panel. The page provides the commands for your operating system.
+Click **Copy MCP configuration** and ask your AI to add this service to its local stdio client settings. The terminal prints the same JSON. Clients accepting `mcpServers` can merge the entry directly. For other formats, use its service name, `command` and complete `args` array. The paths refer to this machine. Once the client loads the configuration, ask it to read the current page or call `connection_ping` to confirm the instance.
 
-On macOS, Google Chrome and Microsoft Edge both use `--chrome-id`. When the running browsers have a single user data root, `connect-codex` uses it. With multiple roots, the bridge looks for the extension ID. To select a root explicitly, append `--chrome-user-data-dir "/absolute/path/to/user data"` to `add` or `connect-codex`. Open `chrome://version` or `edge://version` in the target browser and use the parent of the Profile Path containing `Local State`. Run setup again when the development tool creates a new temporary directory.
-
-| Client | What to do the first time | How to check |
-| --- | --- | --- |
-| Codex | Run the extension’s `connect-codex` command. It prints the registered server name and exits. Use that server in your own conversation once Codex loads the configuration. | The extension shows readiness and the time of the last real Codex access. [Codex MCP guide](https://developers.openai.com/codex/mcp/) |
-| Claude Code | Select **Claude Code** in the extension and run its configuration command in your terminal. If your project has no `.mcp.json`, create one in its root and paste the full output. For an existing file, add the `jtcrpa` entry to its `mcpServers` object. | Reopen Claude Code in that project, approve the project server if prompted, enter `/mcp` and look for `jtcrpa`. Try the same bookshop message. [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) |
-| DeepSeek Harness | Select **DeepSeek Harness** and run the copied command in your terminal. In Harness Web or Desktop Settings, add an MCP server named `jtcrpa`, select `stdio`, and copy `command` and each item in `args` from the generated `config`. For a plugin-based profile, add the generated `mcp-jtcrpa` entry to its plugin list. | Restart Harness with this configuration. Ask it to use `mcp__jtcrpa__connection_ping` to echo `bookshop`. [Harness settings](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-manager/README.md) · [Plugin configuration example](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md#minimal-configuration) |
-| WorkBuddy Desktop | Select **WorkBuddy** in the extension. Register the target browser and run the configuration command. Its `--client claude` option exports the `mcpServers` JSON accepted by WorkBuddy. In WorkBuddy, open **Connectors → Custom connectors**, add the generated server and save. For existing configurations, add the entry under `mcpServers`, choosing a new name if needed. | Ask WorkBuddy to use Jiutouchong to read the current tab title and check the result. [WorkBuddy connector guide](https://cloud.tencent.com/document/product/1831/134525) |
-
-The Windows Codex integration has been tested with Chrome and Firefox. Automated macOS tests cover the native host arguments for both browsers, the handshake and MCP calls. Bridge configuration generation has been verified for Claude Code, DeepSeek Harness and WorkBuddy. Full collection runs in these clients are pending.
+On macOS, Google Chrome and Microsoft Edge both use `--chrome-id`. When the running browsers have a single user data root, `connect` uses it. With multiple roots, the bridge looks for the extension ID. To select a root explicitly, append `--chrome-user-data-dir "/absolute/path/to/user data"` to `add` or `connect`. Open `chrome://version` or `edge://version` in the target browser and use the parent of the Profile Path containing `Local State`. Run setup again when the development tool creates a new temporary directory.
 
 ### Tool calls for the bookshop example
 
@@ -175,14 +157,14 @@ Supply exactly one of `datasetId` or `datasetName` to `dataset_read`. Pages star
 
 ### Manage multiple browser profiles
 
-Codex registers a separate server for each browser profile. For example, Chrome connection `c2` registers as `jtcrpa_chrome_c2`. If the name is taken, setup appends `_2`, `_3`, and so on. Running setup again shortens older default names that include eight characters from the binding ID. Customized entries keep their names. When several profiles are online, refer to the intended connection in your task, such as “Chrome c2.” Each server stays bound to its registered browser. To manage registrations by number, use the commands below.
+Each browser profile has a separate service name, such as `jtcrpa_chrome_c2`. Reconnecting preserves the binding and name. When adding the JSON to a client, choose a different name if an existing entry already targets another browser. Manage connections by number with the following commands.
 
 ```sh
 jtcrpa-mcp list
 jtcrpa-mcp list --json
 ```
 
-If the list shows `待选择实例` (select an instance) and you use Codex, turn on **MCP connection** in the intended profile and run the command shown under **Codex**. The bridge picks that instance automatically, even when several profiles share an extension ID.
+If the list shows `待选择实例` (select an instance), enable **MCP connection** in the intended profile and run the setup command shown there.
 
 For manual configuration of older setups or other clients, use the `add ... --instance ...` command from the list, then generate a configuration with the registered number. For example, this command exports the Claude Code configuration for `c1`.
 

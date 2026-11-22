@@ -8,7 +8,7 @@ import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { manageHostRegistration, removeConnection, clientConfig } from '../dist/install.js';
-import { connectCodex } from '../dist/codex-setup.js';
+import { connect } from '../dist/connect.js';
 import { listConnections, rememberInstance } from '../dist/connections.js';
 import { instanceFile, sessionEndpoint } from '../dist/paths.js';
 import { nativeCaller } from '../dist/browser-identity.js';
@@ -100,15 +100,22 @@ function installedFiles(fixture) {
     });
 }
 
-test('connect-codex returns after the browser acknowledges its registration without starting a client', async t => {
+for (const browser of ['Google Chrome', 'Microsoft Edge', 'Firefox']) {
+    test('connect returns a bound configuration without starting an AI client: ' + browser, t => checkConnect(t, browser));
+}
+
+async function checkConnect(t, browser) {
     const fixture = isolatedInstallation(t);
-    const setup = ['--chrome-id', chromeId];
-    const edgeRoot = path.join(os.homedir(), 'Library/Application Support/Microsoft Edge');
-    if (mac) {
-        fs.mkdirSync(edgeRoot, { recursive: true });
-        fs.writeFileSync(path.join(edgeRoot, 'Local State'), '{}');
-        fixture.chromeProcesses.push('/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge');
-        setup.push('--chrome-user-data-dir', edgeRoot);
+    const firefox = browser === 'Firefox';
+    const caller = firefox ? { kind: 'firefox', extensionId: firefoxId } : { kind: 'chrome', extensionId: chromeId };
+    const selector = ['--' + caller.kind + '-id', caller.extensionId];
+    const setup = [...selector];
+    const root = path.join(os.homedir(), 'Library/Application Support', browser === 'Google Chrome' ? 'Google/Chrome' : browser);
+    if (mac && !firefox) {
+        fs.mkdirSync(root, { recursive: true });
+        fs.writeFileSync(path.join(root, 'Local State'), '{}');
+        fixture.chromeProcesses.push('/Applications/' + browser + '.app/Contents/MacOS/' + browser);
+        setup.push('--chrome-user-data-dir', root);
     }
     await manageHostRegistration('add', setup);
     const instanceId = randomUUID(), ticket = randomUUID();
@@ -127,40 +134,37 @@ test('connect-codex returns after the browser acknowledges its registration with
     });
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(pipe, resolve); });
     try {
-        const caller = { kind: 'chrome', extensionId: chromeId };
         fs.writeFileSync(instanceFile(instanceId), JSON.stringify({ version: 1, instanceId, session, pipe,
             token: 'a'.repeat(64), pid: process.pid, caller }));
         await rememberInstance(caller, instanceId);
-        const fakeCodex = fixture.file('codex.exe');
-        fs.writeFileSync(fakeCodex, '');
-        const previousPath = process.env.PATH;
-        process.env.PATH = fixture.root + path.delimiter + previousPath;
-        t.after(() => { process.env.PATH = previousPath; });
-        const nativeRegistrationCommand = childProcess.spawnSync;
-        const configCalls = [];
-        t.mock.method(childProcess, 'spawnSync', (file, args, options) => {
-            if (file !== (mac ? 'codex' : fakeCodex)) return nativeRegistrationCommand(file, args, options);
-            assert.notEqual(options.stdio, 'inherit');
-            assert.equal(args[0], 'mcp');
-            assert.ok(['list', 'add'].includes(args[1]));
-            configCalls.push(args);
-            return { status: 0, stdout: args[1] === 'list' ? '[]' : '', stderr: '' };
-        });
+        const previous = fixture.read('connections.json');
+        const originalId = previous.connections[0].bindingId;
+        const expectedName = 'jtcrpa_' + caller.kind + '_c1' + (firefox ? '_existing' : '');
+        if (firefox) {
+            previous.connections[0].codexServer = expectedName;
+            fs.writeFileSync(fixture.file('connections.json'), JSON.stringify(previous));
+        }
+        fixture.messages.length = 0;
         t.mock.method(childProcess, 'spawn', () => assert.fail('Unexpected background process during registration'));
         syncBuiltinESMExports();
-        await connectCodex(['--chrome-id', chromeId, '--instance', instanceId, '--setup', ticket]);
+        const args = [...selector, '--instance', instanceId, '--setup', ticket];
+        await connect(args);
         const [binding] = fixture.read('connections.json').connections;
-        assert.equal(binding.codexServer, 'jtcrpa_chrome_c1');
-        assert.deepEqual(configCalls, [['mcp', 'list', '--json'], ['mcp', 'add', binding.codexServer, '--', process.execPath,
-            cli, 'mcp', '--connection', binding.bindingId, '--expect-instance', instanceId]]);
+        assert.equal(binding.serverName, expectedName);
+        assert.equal(binding.bindingId, originalId);
+        const config = { mcpServers: { [binding.serverName]: { type: 'stdio', command: process.execPath,
+            args: [cli, 'mcp', '--connection', binding.bindingId, '--expect-instance', instanceId] } } };
+        assert.deepEqual(fixture.messages.map(JSON.parse), [config]);
+        assert.deepEqual(handshakes[1].params.config, config);
         assert.deepEqual(handshakes.map(item => [item.method, item.params.ticket]), [['codex_setup', ticket], ['codex_setup', ticket]]);
-        assert.equal(handshakes[1].params.serverName, binding.codexServer);
-        if (mac) assert.deepEqual(fixture.read('installation.json').chromeDataDirs, [fs.realpathSync(edgeRoot)]);
-        assert.ok(fixture.messages.at(-1).includes(binding.codexServer));
+        assert.equal(handshakes[1].params.serverName, binding.serverName);
+        if (mac && !firefox) assert.deepEqual(fixture.read('installation.json').chromeDataDirs, [fs.realpathSync(root)]);
+        await connect(args);
+        assert.deepEqual(fixture.messages.map(JSON.parse), [config, config]);
     } finally {
         await new Promise(resolve => server.close(resolve));
     }
-});
+}
 
 test('add writes exact launcher and browser-specific manifests, then uninstall removes owned registration', async (t) => {
     const fixture = isolatedInstallation(t);
@@ -521,7 +525,7 @@ test('macOS resolves a custom Edge root alongside Chrome and requests a director
     fs.writeFileSync(path.join(edge, 'Local State'), '{}');
     fixture.chromeProcesses.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge --user-data-dir=' + edge);
-    await assert.rejects(connectCodex(['--chrome-id', chromeId, '--instance', randomUUID(), '--setup', randomUUID()]),
+    await assert.rejects(connect(['--chrome-id', chromeId, '--instance', randomUUID(), '--setup', randomUUID()]),
         /--chrome-user-data-dir/);
     fs.writeFileSync(path.join(edge, 'Default', 'Preferences'), JSON.stringify({ extensions: { settings: { [chromeId]: {} } } }));
     await manageHostRegistration('add', ['--chrome-id', chromeId]);

@@ -61,7 +61,7 @@ export function resolveChromeDataDir(extensionId: string, explicit?: string, fro
         return fs.realpathSync(explicit);
     }
     const dirs = runningChromeDirs();
-    // connect-codex originates in a live browser. A single root is sufficient
+    // connect originates in a live browser. A single root is sufficient
     // even when macOS does not allow enumeration of the profile directory.
     if (fromRunningBrowser && dirs.size === 1) return [...dirs][0];
     const matches = [...dirs].filter(dir => hasExtension(dir, extensionId));

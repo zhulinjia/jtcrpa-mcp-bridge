@@ -32,11 +32,11 @@ async function inspectConnections(): Promise<List> {
 
 function printList(list: List): void {
     const command = process.platform === 'win32' ? 'jtcrpa-mcp.cmd' : 'jtcrpa-mcp';
-    if (!list.connections.length) console.log(`尚未登记连接。请从插件的 MCP 页面复制 ${command} add 命令。`);
+    if (!list.connections.length) console.log(`尚未登记连接。请从插件的 MCP 页面复制 ${command} connect 命令。`);
     for (const [i, item] of list.connections.entries()) {
         console.log(`${i + 1}. ${item.id}  ${browserNames[item.kind]}  ${item.label ? item.label + '  ' : ''}${item.extensionId}  ${states[item.status]}`);
         console.log('   目标实例  ' + (item.instanceId ?? '待选择实例'));
-        if (item.codexServer) console.log('   Codex 服务  ' + item.codexServer);
+        if (item.serverName) console.log('   MCP 服务  ' + item.serverName);
         for (const candidate of item.candidates.filter(x => x.instanceId !== item.instanceId)) {
             console.log(`   可选实例  ${candidate.instanceId}  ${candidateState(candidate.online)}`);
         }
