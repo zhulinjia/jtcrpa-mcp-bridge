@@ -13,11 +13,21 @@ export async function verifySdkConnection(instanceId, expectedOnline, bridgeHome
         assert.match(client.getInstructions() ?? '', /滚动加载/);
         const tools = await client.listTools();
         assert.ok(tools.tools.every(tool => tool.description?.trim()));
-        assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'capability_probe', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'page_close', 'page_open', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
+        assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ['browser_context', 'capability_probe', 'connection_ping', 'connection_status', 'dataset_list', 'dataset_read', 'file_describe', 'page_close', 'page_open', 'page_probe', 'run_control', 'run_get', 'workflow_contract', 'workflow_get', 'workflow_list', 'workflow_run', 'workflow_save']);
         for (const name of ['page_probe', 'workflow_save', 'workflow_run', 'page_close']) {
             assert.ok(tools.tools.find(tool => tool.name === name).inputSchema.required.includes('pageRef'));
         }
         const contract = tools.tools.find((tool) => tool.name === 'workflow_contract');
+        const describeFile = tools.tools.find(tool => tool.name === 'file_describe');
+        assert.equal(describeFile.annotations.readOnlyHint, true);
+        assert.deepEqual(describeFile.inputSchema.required, ['fileRef']);
+        assert.deepEqual(Object.keys(describeFile.inputSchema.properties), ['fileRef', 'hasHeader']);
+        assert.ok(contract.inputSchema.properties.probeTools.items.enum.includes('describeFile'));
+        const pageProbe = tools.tools.find((tool) => tool.name === 'page_probe');
+        for (const name of ['networkCatalog', 'networkSnapshot', 'probeNetwork']) {
+            assert.ok(pageProbe.inputSchema.properties.tool.enum.includes(name));
+            assert.ok(contract.inputSchema.properties.probeTools.items.enum.includes(name));
+        }
         const capability = tools.tools.find(tool => tool.name === 'capability_probe');
         assert.equal(capability.annotations.readOnlyHint, true);
         assert.deepEqual(capability.inputSchema.required, ['tool']);

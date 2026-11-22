@@ -8,6 +8,9 @@ const pageProbeNames = [
     'probeExtract',
     'probeClick',
     'probeScroll',
+    'networkCatalog',
+    'networkSnapshot',
+    'probeNetwork',
 ] as const;
 const capabilityProbeNames = ['probeUserScript', 'probeFileAccess', 'probeFeishu'] as const;
 
@@ -43,7 +46,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
         schema: z.object({
             includeGuide: z.boolean().optional(),
             nodeTools: z.array(z.string()).max(6).optional(),
-            probeTools: z.array(z.enum([...pageProbeNames, ...capabilityProbeNames])).max(6).optional(),
+            probeTools: z.array(z.enum([...pageProbeNames, ...capabilityProbeNames, 'describeFile'])).max(6).optional(),
         }),
         readOnly: true,
         openWorld: false,
@@ -59,6 +62,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
         name: 'page_probe',
         description:
             '在明确的标签页及 Frame 中调用白名单编译期探针。先通过 workflow_contract 获取其 params Schema。' +
+            '接口目录、响应样例及接口试采只读取已捕获的响应；接口探针省略 frameId 或传 0。' +
             '点击和滚动会真实操作页面，必须提供 requestId，且探测范围须在用户授权之内。' +
             'clean 通过现有沙箱执行。不提供任意 RPC 或 JavaScript 求值接口。',
         schema: z.object({
@@ -70,6 +74,14 @@ export const authoringTools: ForwardedToolDefinition[] = [
         }),
         readOnly: false,
         openWorld: true,
+    },
+    {
+        name: 'file_describe',
+        description: '预览用户在当前浏览器的九头虫「MCP 连接」页选定的一份文件，返回文件结构和少量样例。' +
+            '只接受用户从该页面复制的临时文件引用。CSV 或 Excel 可用 hasHeader 复核首行。',
+        schema: z.object({ fileRef: z.uuid(), hasHeader: z.boolean().optional() }).strict(),
+        readOnly: true,
+        openWorld: false,
     },
     {
         name: 'workflow_list',

@@ -22,6 +22,8 @@
 
    下述流程使用桥接器 0.8.0+ 和配套扩展。开发测试可使用本仓库的 `npm pack` 安装包。
 
+   接口目录、响应样例、接口试采和用户选中的本地文件预览需要桥接器 0.9.0+ 及配套扩展。[调用说明](docs/usage.md)
+
 3. **绑定当前浏览器。** 在 **MCP 连接** 页面开启连接，允许本机通信。复制页面给出的整条 `jtcrpa-mcp connect` 命令，在终端运行。
 4. **把配置交给 AI。** 回到插件页点击 **复制 MCP 配置**，将 JSON 发给支持本机 stdio 的 AI 客户端，请它添加这项服务。终端也会输出同一份 JSON。要添加其他浏览器，从对应浏览器的插件页重复操作。[客户端配置说明](docs/usage.md#客户端配置)
 
@@ -75,6 +77,8 @@
    ```
 
    These steps require bridge 0.8.0 or later and a matching extension. For a development checkout, install the local package produced by `npm pack`.
+
+   Network discovery, response samples, network extraction previews, and previews of user-selected local files require bridge 0.9.0 or later and a matching extension. [Tool usage](docs/usage.md)
 
 3. **Bind the browser.** In the target profile, enable **MCP connection**, allow native messaging and run the full `jtcrpa-mcp connect` command shown on the page.
 4. **Copy the configuration.** Click **Copy MCP configuration** and ask your AI to add the JSON to its local stdio client settings. The terminal prints the same JSON. Repeat from another browser profile to add that profile. [Client configuration](docs/usage.md#client-configuration)
