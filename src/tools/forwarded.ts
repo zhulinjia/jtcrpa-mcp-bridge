@@ -47,8 +47,6 @@ async function forwardToolCall(
             failure.message = '当前连接缺少能力检查工具，权限状态未知。请配套更新九头虫扩展和本机桥接器。';
         } else if (failure.error === 'UNKNOWN_METHOD' && (definition.name === 'page_open' || definition.name === 'page_close')) {
             failure.message = '当前连接尚未提供此页面工具。请配套更新目标浏览器中的九头虫扩展和本机桥接器。';
-        } else if (failure.error === 'UNKNOWN_METHOD' && definition.name === 'file_describe') {
-            failure.message = '当前连接尚未提供文件预览。请配套更新目标浏览器中的九头虫扩展和本机桥接器。';
         } else if (!definition.readOnly) {
             failure.message = 'Outcome may be unknown. Query connection_status with requestId; do not automatically replay.';
         }

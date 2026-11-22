@@ -46,7 +46,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
         schema: z.object({
             includeGuide: z.boolean().optional(),
             nodeTools: z.array(z.string()).max(6).optional(),
-            probeTools: z.array(z.enum([...pageProbeNames, ...capabilityProbeNames, 'describeFile'])).max(6).optional(),
+            probeTools: z.array(z.enum([...pageProbeNames, ...capabilityProbeNames])).max(6).optional(),
         }),
         readOnly: true,
         openWorld: false,
@@ -74,14 +74,6 @@ export const authoringTools: ForwardedToolDefinition[] = [
         }),
         readOnly: false,
         openWorld: true,
-    },
-    {
-        name: 'file_describe',
-        description: '预览用户在当前浏览器的九头虫「MCP 连接」页选定的一份文件，返回文件结构和少量样例。' +
-            '只接受用户从该页面复制的临时文件引用。CSV 或 Excel 可用 hasHeader 复核首行。',
-        schema: z.object({ fileRef: z.uuid(), hasHeader: z.boolean().optional() }).strict(),
-        readOnly: true,
-        openWorld: false,
     },
     {
         name: 'workflow_list',

@@ -30,8 +30,6 @@ macOS 上，Google Chrome 和 Microsoft Edge 都使用 `--chrome-id`。运行中
 
 编写接口采集工作流时，通过 `workflow_contract` 查询 `networkCatalog`、`networkSnapshot` 和 `probeNetwork` 是否可用，再用同一页的 `tabId` 和 `pageRef` 调用 `page_probe`。三者分别列出已捕获接口、查看结构和样例、预检取数和清洗。省略 `frameId` 或传 0。能力缺失时同时检查扩展和桥接器版本。
 
-预览本地文件时，在目标浏览器的「九头虫 → MCP 连接 → 本地文件预览」选定一份文件，复制引用发给 AI。客户端通过 `file_describe({fileRef})` 取得字段和少量样例，CSV 和 Excel 可以追加 `hasHeader` 复核首行。引用十分钟内有效，换选文件或撤回会使原引用失效。
-
 示例文件是 `workflow_save` 的 **workflow 参数**。它包含可通过校验的完整步骤。要重现试采，取第一个节点的 `selectors` 和 `steps` 作为 `probeExtract` 的 `params`。标签页编号和页面引用由 `page_open` 或 `browser_context` 提供，写请求的 UUID 由客户端生成。[查看完整书店规则 JSON](examples/bookshop-workflow.json)
 
 想核对自己客户端发出的请求时，可以从读取结果开始。下面是 MCP `tools/call` 的 `params`，在数据集已写入后即可使用。
@@ -133,8 +131,6 @@ These are the calls behind the three chat messages in the README. Enter the prom
 Saving leaves the tab open. When the user explicitly asks to close a specific page, call `page_close` with its `tabId`, `pageRef`, a fresh `requestId` and `userRequested: true`. After navigation, refresh the page reference from the same service.
 
 For network extraction workflows, check `workflow_contract` for `networkCatalog`, `networkSnapshot`, and `probeNetwork`. Call them through `page_probe` with the same `tabId` and `pageRef`. They list captured endpoints, show response structure and samples, and preview extraction and cleaning. Omit `frameId` or set it to 0. Check both the extension and bridge versions if any probe is unavailable.
-
-To preview a local file, select one file under **Jiutouchong → MCP connection → Local file preview** in the target browser. Copy the reference into your AI chat. The client calls `file_describe({fileRef})` to get fields and a few sample rows. For CSV and Excel, pass `hasHeader` to check the first row again. The reference lasts ten minutes and expires when you select another file or revoke the preview.
 
 The example file is the complete **workflow argument** for `workflow_save`. To reproduce the preview, take `selectors` and `steps` from its first node and pass them as the `params` of `probeExtract`. Get the tab ID and page reference from `page_open` or `browser_context` and generate write-request UUIDs in the client. [View the complete bookshop workflow JSON](examples/bookshop-workflow.json)
 
