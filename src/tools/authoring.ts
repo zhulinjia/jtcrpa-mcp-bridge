@@ -21,7 +21,7 @@ export const authoringTools: ForwardedToolDefinition[] = [
     },
     {
         name: 'page_open',
-        description: '在此服务绑定的浏览器打开用户指定的 HTTP(S) 网址，唯一精确匹配时复用已有页，否则新开后台页。返回实例、tabId、pageRef 和实际网址。编排时在同一服务使用该页，保存后保留。相同请求重用同一 requestId。',
+        description: '在此服务绑定的浏览器打开用户指定的 HTTP(S) 网址，唯一精确匹配时切换到已有标签页，否则新建活动标签页。返回实例、tabId、pageRef 和实际网址。编排时在同一服务使用该页，保存后保留。相同请求重用同一 requestId。',
         schema: z.object({ url: z.url({ protocol: /^https?$/ }), requestId: z.uuid() }),
         readOnly: false,
         destructive: false,
