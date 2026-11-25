@@ -8,7 +8,8 @@ import { MAX_BYTES } from './protocol.ts';
 type Respond = (body: unknown) => void;
 interface Listener {
     ready(): void;
-    request(value: { token?: string; method?: string; params?: unknown; expectedInstanceId?: string; codexBinding?: string; codexAccess?: boolean } | null, respond: Respond): void;
+    request(value: { token?: string; method?: string; params?: unknown; expectedInstanceId?: string;
+        codexBinding?: string; codexAccess?: boolean; routingGrant?: string } | null, respond: Respond): void;
     fail(message: string): void;
     closed(): void;
 }

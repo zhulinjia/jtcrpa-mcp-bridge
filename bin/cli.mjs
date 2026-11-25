@@ -12,7 +12,7 @@ const usage = [
     '客户端接入',
     '  connect (--chrome-id <扩展ID> | --firefox-id <扩展ID>) --instance <UUID> --setup <UUID>',
     '  config (--connection <连接编号> | --instance <UUID>) [--client codex|claude|deepseek]',
-    '  mcp (--connection <配置中的绑定UUID> | --instance <实例UUID>)',
+    '  mcp (--router | --connection <配置中的绑定UUID> | --instance <实例UUID>)',
     '  macOS 版 Chrome 和 Edge 的 add 和 connect 可加 --chrome-user-data-dir <用户数据根目录>',
     '维护',
     '  uninstall    清除当前用户的本机宿主登记',
@@ -44,8 +44,12 @@ try {
     else if (command === 'native-host') await (await import('../dist/native-host.js')).runNativeHost(args);
     else if (command === 'connect') await (await import('../dist/connect.js')).connect(args);
     else if (command === 'mcp') {
-        const { connection, instance, 'expect-instance': expectedInstanceId } = targetOptions(false);
-        await (await import('../dist/mcp.js')).serveMcp(connection !== undefined ? { bindingId: connection, expectedInstanceId } : instance);
+        const { serveMcp } = await import('../dist/mcp.js');
+        if (args.length === 1 && args[0] === '--router') await serveMcp();
+        else {
+            const { connection, instance, 'expect-instance': expectedInstanceId } = targetOptions(false);
+            await serveMcp(connection !== undefined ? { bindingId: connection, expectedInstanceId } : instance);
+        }
     }
     else if (command === 'add' || command === 'uninstall') await (await import('../dist/install.js')).manageHostRegistration(command, args);
     else if (command === 'config') {

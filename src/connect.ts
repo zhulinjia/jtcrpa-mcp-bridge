@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import { checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
+import { browserBrand, checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
 import { addConnection, connectionFile, connectionName, readConnections } from './connections.ts';
 import { boundClientConfig, manageHostRegistration } from './install.ts';
 import { callExtension } from './ipc.ts';
@@ -33,7 +33,7 @@ async function waitForBrowser(target: BrowserTarget, instanceId: string, ticket:
 
 export async function connect(args: string[]) {
     const { values } = parseArgs({ args, options: { 'chrome-user-data-dir': { type: 'string' }, 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' },
-        instance: { type: 'string' }, setup: { type: 'string' } } });
+        instance: { type: 'string' }, setup: { type: 'string' }, brand: { type: 'string' } } });
     const chrome = values['chrome-id'], firefox = values['firefox-id'];
     const { instance: instanceId, setup: ticket } = values;
     if (Boolean(chrome) === Boolean(firefox) || !validInstance(instanceId) || !validInstance(ticket)) {
@@ -42,6 +42,12 @@ export async function connect(args: string[]) {
     const target: BrowserTarget = chrome ? { kind: 'chrome', extensionId: chrome } : { kind: 'firefox', extensionId: firefox! };
     checkExtensionId(target.kind, target.extensionId);
     const registration = ['--' + target.kind + '-id', target.extensionId];
+    if (values.brand !== undefined) {
+        if (!browserBrand(values.brand) || (target.kind === 'firefox') !== (values.brand === 'firefox')) {
+            throw new Error('浏览器品牌与扩展 ID 不匹配。');
+        }
+        registration.push('--brand', values.brand);
+    }
     const directory = values['chrome-user-data-dir'];
     if (directory !== undefined) registration.push('--chrome-user-data-dir', directory);
     await manageHostRegistration('add', registration, { fromRunningBrowser: true });

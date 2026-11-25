@@ -2,17 +2,37 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { bridgeRoot, listRunningHosts } from './paths.ts';
-import { sameExtension, type BrowserTarget } from './browser-identity.ts';
+import { sameExtension, type BrowserBrand, type BrowserTarget } from './browser-identity.ts';
 import { validInstance } from './protocol.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { replaceFile } from './registration-files.ts';
 
-export interface Connection extends BrowserTarget { id: string; instanceId: string | null; bindingId?: string; serverName?: string; codexServer?: string; label?: string }
+export interface RouterGrant { grantId: string; label: string; brand?: BrowserBrand }
+export interface RouterSettings {
+    grantId: string | null;
+    label: string;
+    brand?: BrowserBrand;
+}
+export interface Connection extends BrowserTarget {
+    id: string;
+    instanceId: string | null;
+    bindingId?: string;
+    serverName?: string;
+    codexServer?: string;
+    label?: string;
+    routing?: RouterGrant;
+}
 interface Observation extends BrowserTarget { instanceId: string }
-export interface ConnectionStore { nextId: number; connections: Connection[]; observed: Observation[] }
+export interface ConnectionStore {
+    nextId: number;
+    connections: Connection[];
+    observed: Observation[];
+}
 
 export function connectionName(connection: Connection): string {
-    const name = (connection.kind === 'chrome' ? 'Chrome' : 'Firefox') + ' · ' + connection.id;
+    const brand = { chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox' }[connection.routing?.brand ?? connection.kind];
+    const name = brand + ' · ' + connection.id;
+    if (connection.routing) return connection.routing.label ? brand + ' · ' + connection.routing.label : name;
     return connection.label ? name + '（' + connection.label + '）' : name;
 }
 
@@ -78,6 +98,22 @@ export async function rememberInstance(caller: BrowserTarget, instanceId: string
         if (store.observed.some(item => sameExtension(item, caller) && item.instanceId === instanceId)) return;
         store.observed.push({ ...caller, instanceId });
         replaceFile(connectionFile(), JSON.stringify(store));
+    });
+}
+
+export function saveRouterSettings(caller: BrowserTarget, instanceId: string, settings: RouterSettings) {
+    return withRegistrationLock(() => {
+        const store = readConnections();
+        const connection = store.connections.find(item => item.instanceId === instanceId && sameExtension(item, caller));
+        const { grantId, label, brand } = settings;
+        if (!connection?.bindingId) return { grantId, bound: false };
+
+        const before = JSON.stringify(store);
+        if (grantId === null) delete connection.routing;
+        else connection.routing = { grantId, label, brand };
+        const updated = JSON.stringify(store);
+        if (updated !== before) replaceFile(connectionFile(), updated);
+        return { grantId, bound: true, displayName: connectionName(connection) };
     });
 }
 

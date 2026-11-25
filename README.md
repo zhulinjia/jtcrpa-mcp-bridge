@@ -20,12 +20,13 @@
    jtcrpa-mcp --version
    ```
 
-   下述流程使用桥接器 0.8.0+ 和配套扩展。开发测试可使用本仓库的 `npm pack` 安装包。
+   通用 MCP 入口使用桥接器 0.12.1 和配套扩展。开发测试可使用本仓库的 `npm pack` 安装包。
 
    接口目录、响应样例和接口试采需要桥接器 0.9.0+ 及配套扩展。[调用说明](docs/usage.md)
 
 3. **绑定当前浏览器。** 在 **MCP 连接** 页面开启连接，允许本机通信。复制页面给出的整条 `jtcrpa-mcp connect` 命令，在终端运行。
-4. **把配置交给 AI。** 回到插件页点击 **复制 MCP 配置**，将 JSON 发给支持本机 stdio 的 AI 客户端，请它添加这项服务。终端也会输出同一份 JSON。要添加其他浏览器，从对应浏览器的插件页重复操作。[客户端配置说明](docs/usage.md#客户端配置)
+4. **把配置交给 AI。** 回到插件页点击 **复制通用 MCP 配置**。每个支持本机 stdio 的 AI 客户端添加一次 `jtcrpa` 服务。加入其他浏览器时，在对应插件页开启连接并完成接入。
+5. **选择浏览器。** 在对话中可按名称指定，例如「用 Firefox 的店铺 A」。新任务只有一份配置在线时可直接开始，有多份时 AI 会请你选择。采集进行中继续使用原目标。
 
 ### 第一次用 MCP 采集书名和价格
 
@@ -76,12 +77,13 @@
    jtcrpa-mcp --version
    ```
 
-   These steps require bridge 0.8.0 or later and a matching extension. For a development checkout, install the local package produced by `npm pack`.
+   The unified MCP entry requires bridge 0.12.1 and its matching extension. For a development checkout, install the local package produced by `npm pack`.
 
    Network discovery, response samples, network extraction previews, and previews of user-selected local files require bridge 0.9.0 or later and a matching extension. [Tool usage](docs/usage.md)
 
 3. **Bind the browser.** In the target profile, enable **MCP connection**, allow native messaging and run the full `jtcrpa-mcp connect` command shown on the page.
-4. **Copy the configuration.** Click **Copy MCP configuration** and ask your AI to add the JSON to its local stdio client settings. The terminal prints the same JSON. Repeat from another browser profile to add that profile. [Client configuration](docs/usage.md#client-configuration)
+4. **Copy the configuration.** Return to the extension and copy the unified MCP configuration. Add the `jtcrpa` service once to each client that supports local stdio. To add another browser profile, enable the connection and complete pairing in that profile.
+5. **Choose a browser.** Name the browser profile in chat. A new task starts directly when only one profile is online. When multiple profiles are available, the AI asks you to choose. Existing tasks keep using their selected profile.
 
 ### Collect your first four books
 

@@ -2,17 +2,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import type { BrowserBrand } from './browser-identity.ts';
 
 export const defaultChromeDataDir = () => path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
+const defaultEdgeDataDir = () => path.join(os.homedir(), 'Library/Application Support/Microsoft Edge');
 
 // ps on macOS flattens argv. Keep spaces inside paths and ignore trailing
 // positional arguments (e.g. a URL) after an existing user data directory.
-function dataDirFromCommand(command: string): string | undefined {
+function dataDirFromCommand(command: string, brand?: BrowserBrand): string | undefined {
     const browser = /^\/.*\/(Google Chrome|Microsoft Edge)\.app\/Contents\/MacOS\/\1(?:\s|$)/.exec(command)?.[1];
     if (!browser) return;
+    const actual = browser === 'Microsoft Edge' ? 'edge' : 'chrome';
+    if (brand && brand !== actual) return;
     const flag = /\s--user-data-dir(?:=|\s+)(.+?)(?=\s--|$)/.exec(command);
-    if (!flag) return browser === 'Microsoft Edge'
-        ? path.join(os.homedir(), 'Library/Application Support/Microsoft Edge') : defaultChromeDataDir();
+    if (!flag) return actual === 'edge' ? defaultEdgeDataDir() : defaultChromeDataDir();
     let value = flag[1].trim();
     while (path.isAbsolute(value)) {
         if (fs.statSync(path.join(value, 'Local State'), { throwIfNoEntry: false })?.isFile()) return value;
@@ -22,7 +25,7 @@ function dataDirFromCommand(command: string): string | undefined {
     }
 }
 
-function runningChromeDirs(): Set<string> {
+function runningChromeDirs(brand?: BrowserBrand): Set<string> {
     const found = spawnSync('/usr/bin/pgrep', ['-u', String(process.getuid!()), '-x', '(Google Chrome|Microsoft Edge)'], { encoding: 'utf8' });
     const pids = found.stdout?.trim().split(/\s+/);
     if (found.status !== 0 || !pids?.every(pid => /^\d+$/.test(pid))) return new Set();
@@ -30,7 +33,7 @@ function runningChromeDirs(): Set<string> {
     const dirs = new Set<string>();
     for (const command of (list.stdout ?? '').split('\n')) {
         try {
-            const dir = dataDirFromCommand(command.trim());
+            const dir = dataDirFromCommand(command.trim(), brand);
             if (dir) dirs.add(fs.realpathSync(dir));
         } catch { /* The process may exit or its profile may be inaccessible. */ }
     }
@@ -53,20 +56,22 @@ function hasExtension(root: string, extensionId: string): boolean {
     return false;
 }
 
-export function resolveChromeDataDir(extensionId: string, explicit?: string, fromRunningBrowser = false): string {
+export function resolveChromeDataDir(extensionId: string, explicit?: string, fromRunningBrowser = false, brand?: BrowserBrand): string {
     if (explicit !== undefined) {
         if (!path.isAbsolute(explicit) || !fs.statSync(path.join(explicit, 'Local State'), { throwIfNoEntry: false })?.isFile()) {
             throw new Error('--chrome-user-data-dir 需要现有 Chrome 用户数据根目录的绝对路径（含 Local State）。');
         }
         return fs.realpathSync(explicit);
     }
-    const dirs = runningChromeDirs();
+    const dirs = runningChromeDirs(brand);
     // connect originates in a live browser. A single root is sufficient
     // even when macOS does not allow enumeration of the profile directory.
     if (fromRunningBrowser && dirs.size === 1) return [...dirs][0];
     const matches = [...dirs].filter(dir => hasExtension(dir, extensionId));
-    if (matches.length > 1 || (fromRunningBrowser && dirs.size > 1 && !matches.length)) {
-        throw new Error('无法唯一确定 Chrome 或 Edge 的用户数据目录，请用 --chrome-user-data-dir 指定目标目录。');
+    const candidates = matches.length > 1 ? matches : fromRunningBrowser && !matches.length ? [...dirs] : [];
+    if (candidates.length > 1) {
+        throw new Error('请选择目标浏览器的数据目录，在接入命令最后加上 --chrome-user-data-dir "<目录>"。\n'
+            + candidates.map((directory, index) => `  ${index + 1}. ${JSON.stringify(directory)}`).join('\n'));
     }
-    return matches[0] ?? defaultChromeDataDir();
+    return matches[0] ?? (brand === 'edge' ? defaultEdgeDataDir() : defaultChromeDataDir());
 }

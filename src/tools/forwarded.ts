@@ -54,7 +54,7 @@ async function forwardToolCall(
     }
 }
 
-function toToolResult(result: unknown) {
+export function toToolResult(result: unknown) {
     const content = [{ type: 'text' as const, text: JSON.stringify(result) }];
     if (isToolFailure(result)) return { isError: true, content };
     return { content };

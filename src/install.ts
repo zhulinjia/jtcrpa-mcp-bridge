@@ -8,7 +8,7 @@ import { HOST, validInstance } from './protocol.ts';
 import { defaultChromeDataDir, resolveChromeDataDir } from './mac-chrome.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { replaceFile } from './registration-files.ts';
-import { checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
+import { browserBrand, checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
 import { addConnection, bindingForConnection, connectionFile, ensureCanRemove, getConnection, readConnections, validConnectionId, type Connection } from './connections.ts';
 import {
     readHostRegistration,
@@ -42,6 +42,10 @@ interface InstallationBackup {
 export function boundClientConfig(name: string, bindingId: string, instanceId: string) {
     const args = [cli, 'mcp', '--connection', bindingId, '--expect-instance', instanceId];
     return { mcpServers: { [name]: { type: 'stdio', command: process.execPath, args } } };
+}
+
+export function routerClientConfig() {
+    return { mcpServers: { jtcrpa: { type: 'stdio', command: process.execPath, args: [cli, 'mcp', '--router'] } } };
 }
 
 export async function clientConfig(target: string) {
@@ -179,6 +183,7 @@ function uninstallNativeHost(paths: InstallationPaths): void {
 function parseBrowserTargets(args: string[], fromRunningBrowser: boolean) {
     const { values } = parseArgs({ args, options: {
         'chrome-user-data-dir': { type: 'string' }, 'chrome-id': { type: 'string' }, 'firefox-id': { type: 'string' }, instance: { type: 'string' },
+        brand: { type: 'string' },
     } });
     const chrome = values['chrome-id'];
     const firefox = values['firefox-id'];
@@ -194,7 +199,11 @@ function parseBrowserTargets(args: string[], fromRunningBrowser: boolean) {
     if (explicit !== undefined && (!chrome || process.platform !== 'darwin')) {
         throw new Error('--chrome-user-data-dir 仅适用于 macOS 上的 --chrome-id。');
     }
-    const chromeDataDir = chrome && process.platform === 'darwin' ? resolveChromeDataDir(chrome, explicit, fromRunningBrowser) : undefined;
+    const brand = values.brand;
+    if (brand !== undefined && (!browserBrand(brand) || !(brand === 'firefox' ? firefox : chrome))) {
+        throw new Error('浏览器品牌与扩展 ID 不匹配。');
+    }
+    const chromeDataDir = chrome && process.platform === 'darwin' ? resolveChromeDataDir(chrome, explicit, fromRunningBrowser, brand) : undefined;
     return { targets, instanceId: values.instance, chromeDataDir };
 }
 
