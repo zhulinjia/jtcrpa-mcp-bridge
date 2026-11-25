@@ -3,13 +3,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { setTimeout as delay } from 'node:timers/promises';
 import { bridgeRoot, listRunningHosts } from './paths.ts';
 import { HOST, validInstance } from './protocol.ts';
 import { defaultChromeDataDir, resolveChromeDataDir } from './mac-chrome.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { replaceFile } from './registration-files.ts';
 import { browserBrand, checkExtensionId, sameExtension, type BrowserTarget } from './browser-identity.ts';
-import { addConnection, bindingForConnection, connectionFile, ensureCanRemove, getConnection, readConnections, validConnectionId, type Connection } from './connections.ts';
+import { addConnection, bindingForConnection, connectionFile, getConnection, isInstanceRevoked, readConnections, revokeInstances, validConnectionId, type Connection } from './connections.ts';
 import {
     readHostRegistration,
     registerHost,
@@ -65,12 +66,17 @@ function installationPaths(): InstallationPaths {
     return { root, record: path.join(root, 'installation.json'), launcher: path.join(root, launcher) };
 }
 
-export async function manageHostRegistration(command: 'add' | 'uninstall', args: string[], { fromRunningBrowser = false } = {}): Promise<void> {
+export async function manageHostRegistration(command: 'add' | 'uninstall', args: string[],
+    { fromRunningBrowser = false, setupInstanceId }: { fromRunningBrowser?: boolean; setupInstanceId?: string } = {},
+): Promise<void> {
     if (command === 'uninstall' && args.length) throw new Error('uninstall does not accept arguments. See jtcrpa-mcp uninstall --help.');
     const paths = installationPaths();
     await withRegistrationLock(() => {
         if (command === 'uninstall') uninstallNativeHost(paths);
         else {
+            if (setupInstanceId && isInstanceRevoked(readConnections(), setupInstanceId)) {
+                throw new Error('该浏览器连接已移除，请从九头虫的 MCP 页面重新接入。');
+            }
             const { targets, instanceId, chromeDataDir } = parseBrowserTargets(args, fromRunningBrowser);
             const message = addNativeHost(paths, targets, instanceId, chromeDataDir);
             if (fromRunningBrowser) console.error(message);
@@ -99,7 +105,7 @@ function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], insta
 }
 
 export async function removeConnection(expected: Connection): Promise<void> {
-    await withRegistrationLock(() => {
+    const active = await withRegistrationLock(() => {
         const store = readConnections();
         const before = getConnection(store, expected.id);
         if (!sameExtension(before, expected) || before.instanceId !== expected.instanceId || before.bindingId !== expected.bindingId) {
@@ -107,11 +113,13 @@ export async function removeConnection(expected: Connection): Promise<void> {
         }
         store.connections = store.connections.filter(item => item.id !== before.id);
         const revoke = !store.connections.some(item => sameExtension(before, item));
-        ensureCanRemove(before, revoke);
-        if (revoke) store.observed = store.observed.filter(item => !sameExtension(before, item));
+        const affected = listRunningHosts().filter(host => sameExtension(before, host.caller) &&
+            (revoke || host.instanceId === before.instanceId));
+        const observed = revoke ? store.observed.filter(item => sameExtension(before, item)) : [];
+        revokeInstances(store, [before.instanceId, ...observed.map(item => item.instanceId), ...affected.map(host => host.instanceId)]);
         const paths = installationPaths();
         const backup = captureInstallationBackup(paths, []);
-        const files = new Map([[connectionFile(), JSON.stringify(store)]]);
+        const files = new Map<string, string>();
         if (revoke) {
             const manifest = manifestPath(paths, before.kind);
             const installation = readInstallationRecord(paths.record);
@@ -124,15 +132,21 @@ export async function removeConnection(expected: Connection): Promise<void> {
             backup.files.set(manifest, fs.readFileSync(manifest));
             files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, { ...before, action: 'remove' }, backup.files.get(manifest)), null, 2));
         }
+        // Publish revocations after manifest writes so a rollback cannot disconnect a live session.
+        files.set(connectionFile(), JSON.stringify(store));
         commitRegistration(paths, backup, files, new Map());
+        return affected;
     });
+    await waitForDisconnectedHosts(active);
 }
 
-export function clearConnections(): Promise<number> {
-    return withRegistrationLock(() => {
-        if (listRunningHosts().length) throw new Error('请先关闭所有浏览器配置中的 MCP 连接，再运行 clear。');
+export async function clearConnections(): Promise<number> {
+    const { active, count } = await withRegistrationLock(() => {
         const paths = installationPaths();
         const store = readConnections();
+        const active = listRunningHosts();
+        const count = store.connections.length;
+        revokeInstances(store, [...store.connections, ...store.observed, ...active].map(item => item.instanceId));
         const backup = captureInstallationBackup(paths, []);
         const files = new Map<string, string>();
         for (const kind of ['chrome', 'firefox'] as const) {
@@ -142,12 +156,31 @@ export function clearConnections(): Promise<number> {
             backup.files.set(manifest, contents);
             files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, { kind, action: 'clear' }, contents), null, 2));
         }
-        if (backup.files.get(connectionFile())) {
-            files.set(connectionFile(), JSON.stringify({ nextId: store.nextId, connections: [], observed: [] }));
+        if (backup.files.get(connectionFile()) || store.revokedInstances?.length) {
+            const { nextId, revokedInstances } = store;
+            files.set(connectionFile(), JSON.stringify({ nextId, connections: [], observed: [], revokedInstances }));
         }
         commitRegistration(paths, backup, files, new Map());
-        return store.connections.length;
+        return { active, count };
     });
+    await waitForDisconnectedHosts(active);
+    return count;
+}
+
+async function waitForDisconnectedHosts(active: ReturnType<typeof listRunningHosts>): Promise<void> {
+    if (!active.length) return;
+    const deadline = Date.now() + 2000;
+    for (;;) {
+        const current = listRunningHosts();
+        const remaining = active.filter(host => current.some(item =>
+            item.instanceId === host.instanceId && item.session === host.session));
+        if (!remaining.length) return;
+        if (Date.now() >= deadline) {
+            console.error('授权已撤销，以下实例尚未确认断开：' + remaining.map(host => host.instanceId).join(', '));
+            return;
+        }
+        await delay(50);
+    }
 }
 
 function commitRegistration(paths: InstallationPaths, backup: InstallationBackup, files: Map<string, string>, register: Map<BrowserKind, string>): boolean {

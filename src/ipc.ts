@@ -2,7 +2,7 @@ import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readDiscovery } from './paths.ts';
 import { MAX_BYTES } from './protocol.ts';
-import { findBinding } from './connections.ts';
+import { isInstanceRevoked, readConnections } from './connections.ts';
 import { sameExtension } from './browser-identity.ts';
 
 export type McpTarget = string | { bindingId: string; expectedInstanceId?: string; reportCodexAccess?: boolean; routingGrant?: string };
@@ -12,7 +12,8 @@ class BeforeDispatchError extends Error {}
 
 function resolveTarget(target: McpTarget) {
     const bound = typeof target === 'string' ? undefined : target;
-    const connection = bound && findBinding(bound.bindingId);
+    const store = readConnections();
+    const connection = bound && store.connections.find(item => item.bindingId === bound.bindingId);
     if (bound && !connection) throw new Error('CONNECTION_REMOVED');
     const expected = bound?.expectedInstanceId;
     if (expected && connection?.instanceId !== expected) throw new Error('CONNECTION_INSTANCE_MISMATCH');
@@ -21,6 +22,7 @@ function resolveTarget(target: McpTarget) {
     }
     const instanceId = typeof target === 'string' ? target : connection?.instanceId;
     if (!instanceId) throw new Error('CONNECTION_INSTANCE_NOT_SELECTED');
+    if (isInstanceRevoked(store, instanceId)) throw new Error('CONNECTION_REMOVED');
     let record: ReturnType<typeof readDiscovery>;
     try {
         record = readDiscovery(instanceId);

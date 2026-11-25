@@ -5,8 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { bridgeRoot, instanceFile, sessionEndpoint, type Discovery } from './paths.ts';
 import { nativeDecoder, nativeFrame, validInstance, VERSION } from './protocol.ts';
 import { METHODS } from './methods.ts';
-import { browserBrand, nativeCaller, type BrowserTarget } from './browser-identity.ts';
-import { findBinding, rememberInstance, saveRouterSettings, type RouterSettings } from './connections.ts';
+import { browserBrand, nativeCaller, sameExtension, type BrowserTarget } from './browser-identity.ts';
+import { connectionFile, isInstanceRevoked, readConnections, rememberInstance, saveRouterSettings, type RouterSettings } from './connections.ts';
 import { routerClientConfig } from './install.ts';
 import { withRegistrationLock } from './registration-lock.ts';
 import { listenForClients } from './native-transport.ts';
@@ -38,6 +38,7 @@ export async function runNativeHost(args: string[]) {
     const caller = nativeCaller(args);
     let record: Discovery | undefined;
     let closeTransport: (() => void) | undefined;
+    let stopWatchingRegistration: (() => void) | undefined;
     let claimed = false;
     let closed = false;
     let sequence = 0;
@@ -59,6 +60,7 @@ export async function runNativeHost(args: string[]) {
         clearTimeout(timer);
         for (const item of pending.values()) clearTimeout(item.timer);
         pending.clear();
+        stopWatchingRegistration?.();
         closeTransport?.();
         if (record && claimed) {
             try {
@@ -96,6 +98,18 @@ export async function runNativeHost(args: string[]) {
         await rememberInstance(caller, current.instanceId);
         const initialRouterState = settings && await routerState(current, settings);
         if (closed) return;
+        const file = connectionFile();
+        const checkRevocation = () => {
+            if (closed) return;
+            try {
+                if (isInstanceRevoked(readConnections(), current.instanceId)) fail('CONNECTION_REMOVED');
+            } catch { fail('REGISTRATION_READ_FAILED'); }
+        };
+        // Watch the filename across atomic replacements. The callback only reads on a stat change.
+        fs.watchFile(file, { interval: 500, persistent: false }, checkRevocation);
+        stopWatchingRegistration = () => fs.unwatchFile(file, checkRevocation);
+        checkRevocation();
+        if (closed) return;
         timer = setTimeout(() => fail('PIPE_HOST_START_TIMEOUT'), 10000);
         closeTransport = listenForClients(current.pipe, {
             ready() {
@@ -112,12 +126,21 @@ export async function runNativeHost(args: string[]) {
                     respond({ ok: false, error: 'UNAUTHORIZED' });
                     return;
                 }
+                const store = readConnections();
+                if (isInstanceRevoked(store, current.instanceId)) {
+                    fail('CONNECTION_REMOVED');
+                    return;
+                }
+                const binding = validInstance(request.codexBinding) && store.connections.find(item => item.bindingId === request.codexBinding);
                 if (request.expectedInstanceId !== undefined && (request.expectedInstanceId !== current.instanceId || !validInstance(request.codexBinding))) {
                     respond({ ok: false, error: 'CONNECTION_INSTANCE_MISMATCH' });
                     return;
                 }
+                if (request.codexBinding !== undefined && (!binding || binding.instanceId !== current.instanceId || !sameExtension(caller, binding))) {
+                    respond({ ok: false, error: 'CONNECTION_REMOVED' });
+                    return;
+                }
                 if (request.routingGrant !== undefined) {
-                    const binding = validInstance(request.codexBinding) && findBinding(request.codexBinding);
                     if (request.method === 'codex_setup' || request.expectedInstanceId !== current.instanceId || !binding ||
                         binding.instanceId !== current.instanceId || !validInstance(request.routingGrant) ||
                         request.routingGrant !== routingGrant || request.routingGrant !== binding.routing?.grantId) {

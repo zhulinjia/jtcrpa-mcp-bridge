@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { callExtension } from '../dist/ipc.js';
 import { connectionFile, readConnections, saveRouterSettings } from '../dist/connections.js';
+import { clearConnections, removeConnection } from '../dist/install.js';
 import { instanceFile, sessionEndpoint } from '../dist/paths.js';
 import { nativeDecoder, nativeFrame, VERSION } from '../dist/protocol.js';
 import { canListenLocally } from '../test-support/native-ipc.mjs';
@@ -106,6 +107,49 @@ test('router hands over after old native host releases, never replays a dispatch
     replacement.reply(stillOriginalRequest, stillOriginalRequest.params.text);
     assert.equal(await stillOriginal, 'original');
     await replacement.stop();
+});
+
+test('a removed instance cannot reconnect when another profile shares its extension ID', {
+    skip: !['darwin', 'win32'].includes(process.platform),
+}, async t => {
+    const { instanceId, grantId } = isolatedRoute(t);
+    const store = readConnections();
+    const [removed] = store.connections;
+    store.connections.push({ ...removed, id: 'c2', instanceId: randomUUID(), bindingId: randomUUID() });
+    fs.writeFileSync(connectionFile(), JSON.stringify(store));
+    await removeConnection(removed);
+
+    const browser = startHost(t, instanceId, grantId);
+    assert.equal((await browser.next('error')).error, 'CONNECTION_REMOVED');
+    assert.ok(!browser.messages.some(message => message.type === 'connected'));
+    await assert.rejects(callExtension(instanceId, 'connection_ping', { text: 'old setup' }), /CONNECTION_REMOVED/);
+});
+
+test('remove disconnects just the selected live profile and clear disconnects the remainder', {
+    skip: !['darwin', 'win32'].includes(process.platform), timeout: 30_000,
+}, async t => {
+    if (!await canListenLocally(t)) return;
+    const { instanceId, grantId } = isolatedRoute(t);
+    const store = readConnections();
+    const [removed] = store.connections;
+    const retained = { ...removed, id: 'c2', instanceId: randomUUID(), bindingId: randomUUID() };
+    store.connections.push(retained);
+    fs.writeFileSync(connectionFile(), JSON.stringify(store));
+    const first = startHost(t, instanceId, grantId);
+    const second = startHost(t, retained.instanceId, randomUUID());
+    await Promise.all([first.next('connected'), second.next('connected')]);
+
+    await removeConnection(removed);
+    assert.equal((await first.next('error')).error, 'CONNECTION_REMOVED');
+    assert.ok(!fs.existsSync(instanceFile(instanceId)));
+    const ping = callExtension(retained.instanceId, 'connection_ping', { text: 'still connected' });
+    second.reply(await second.next('request'), 'still connected');
+    assert.equal(await ping, 'still connected');
+
+    assert.equal(await clearConnections(), 1);
+    assert.equal((await second.next('error')).error, 'CONNECTION_REMOVED');
+    assert.ok(!fs.existsSync(instanceFile(retained.instanceId)));
+    assert.deepEqual(readConnections().connections, []);
 });
 
 test('router retries only before dispatch, then preserves an unknown write outcome', async t => {

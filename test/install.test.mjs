@@ -261,7 +261,8 @@ test('add refuses to overwrite another installation', { skip: process.platform !
 test('active instance prevents replacing the launcher and uninstalling', async (t) => {
     const fixture = isolatedInstallation(t);
     fs.mkdirSync(fixture.file('instances'));
-    fs.writeFileSync(fixture.file(`instances/${'a'.repeat(64)}.json`), JSON.stringify({ pid: process.pid, instanceId: 'online' }));
+    const instanceId = randomUUID();
+    fs.writeFileSync(instanceFile(instanceId), JSON.stringify({ pid: process.pid, instanceId }));
     await assert.rejects(manageHostRegistration('add', bothBrowsers), { message: 'Disable MCP before changing the native host launcher.' });
     await assert.rejects(manageHostRegistration('uninstall', []), { message: 'Disable MCP in the browser before uninstalling.' });
     assert.ok(fixture.commands.every(([action]) => action === 'query'));
@@ -375,8 +376,9 @@ test('stable records distinguish profiles, persist offline, and withdraw only th
     assert.match((await clientConfig(one.id)).codex, /--connection/);
     fs.writeFileSync(instanceFile(first), JSON.stringify({ instanceId: first, pid: process.pid, caller }));
     assert.equal(listConnections().connections[0].status, 'online');
-    await assert.rejects(removeConnection(one), new RegExp(first));
     await removeConnection(two);
+    assert.equal(listConnections().connections[0].status, 'online');
+    await assert.rejects(callExtension(second, 'connection_status'), /CONNECTION_REMOVED/);
     assert.deepEqual(fixture.read('chrome.json').allowed_origins, [`chrome-extension://${chromeId}/`]);
     fs.unlinkSync(instanceFile(first));
     const offline = listConnections().connections[0];
@@ -483,7 +485,9 @@ test('clear removes every profile and grant while retaining the native host inst
 
     await clearCommand([]);
     assert.equal(fixture.messages.at(-1), '已清空 3 条连接。');
-    assert.deepEqual(fixture.read('connections.json'), { nextId: before.nextId, connections: [], observed: [] });
+    assert.deepEqual(fixture.read('connections.json'), {
+        nextId: before.nextId, connections: [], observed: [], revokedInstances: before.connections.map(item => item.instanceId),
+    });
     assert.deepEqual(fixture.read('chrome.json').allowed_origins, []);
     assert.deepEqual(fixture.read('firefox.json').allowed_extensions, []);
     assert.deepEqual(installedFiles(fixture).slice(0, 2), [launcher, installation]);
@@ -493,20 +497,21 @@ test('clear removes every profile and grant while retaining the native host inst
     assert.deepEqual(installedFiles(fixture), cleared);
     await manageHostRegistration('add', ['--chrome-id', chromeId]);
     assert.equal(listConnections().connections[0].id, 'c' + before.nextId);
-    for (const { bindingId } of before.connections) {
+    for (const { bindingId, instanceId } of before.connections) {
         await assert.rejects(callExtension({ bindingId }, 'connection_status'), /CONNECTION_REMOVED/);
+        await assert.rejects(callExtension(instanceId, 'connection_status'), /CONNECTION_REMOVED/);
     }
+    const after = installedFiles(fixture);
+    await assert.rejects(connect(['--chrome-id', chromeId, '--instance', before.connections[0].instanceId, '--setup', randomUUID()]), /重新接入/);
+    assert.deepEqual(installedFiles(fixture), after);
 });
 
-test('clear preserves all registrations if a host is active or saving the cleared store fails', async t => {
+test('clear preserves the live session and all registrations if writing the revoked state fails', async t => {
     const fixture = isolatedInstallation(t);
     await manageHostRegistration('add', bothBrowsers);
     const old = installedFiles(fixture);
     const instanceId = randomUUID();
     fs.writeFileSync(instanceFile(instanceId), JSON.stringify({ instanceId, pid: process.pid }));
-    await assert.rejects(clearCommand([]), /关闭所有浏览器配置中的 MCP/);
-    assert.deepEqual(installedFiles(fixture), old);
-    fs.unlinkSync(instanceFile(instanceId));
 
     const rename = fs.renameSync;
     t.mock.method(fs, 'renameSync', (from, to) => {
@@ -515,6 +520,7 @@ test('clear preserves all registrations if a host is active or saving the cleare
     });
     await assert.rejects(clearCommand([]), /connections file busy/);
     assert.deepEqual(installedFiles(fixture), old);
+    assert.ok(fs.existsSync(instanceFile(instanceId)));
 });
 
 test('macOS registration rolls back a partial install and preserves foreign manifests', { skip: !mac }, async t => {

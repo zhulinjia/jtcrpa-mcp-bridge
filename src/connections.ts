@@ -27,6 +27,7 @@ export interface ConnectionStore {
     nextId: number;
     connections: Connection[];
     observed: Observation[];
+    revokedInstances?: string[];
 }
 
 export function connectionName(connection: Connection): string {
@@ -43,7 +44,8 @@ export function readConnections(): ConnectionStore {
     const file = connectionFile();
     if (!fs.existsSync(file)) return { nextId: 1, connections: [], observed: [] };
     const store = JSON.parse(fs.readFileSync(file, 'utf8')) as ConnectionStore;
-    if (!Number.isSafeInteger(store.nextId) || store.nextId < 1 || !Array.isArray(store.connections) || !Array.isArray(store.observed)) {
+    if (!Number.isSafeInteger(store.nextId) || store.nextId < 1 || !Array.isArray(store.connections) || !Array.isArray(store.observed)
+        || (store.revokedInstances !== undefined && (!Array.isArray(store.revokedInstances) || !store.revokedInstances.every(validInstance)))) {
         throw new Error('Invalid connections.json');
     }
     return store;
@@ -86,6 +88,7 @@ export function addConnection(store: ConnectionStore, target: BrowserTarget, ins
 }
 
 function checkObserved(store: ConnectionStore, target: BrowserTarget, instanceId: string): void {
+    if (isInstanceRevoked(store, instanceId)) throw new Error('CONNECTION_REMOVED');
     if (!validInstance(instanceId) || !store.observed.some(item => sameExtension(item, target) && item.instanceId === instanceId)) {
         throw new Error('该实例尚未通过这个扩展的握手，请先在相应浏览器中开启 MCP。');
     }
@@ -94,6 +97,7 @@ function checkObserved(store: ConnectionStore, target: BrowserTarget, instanceId
 export async function rememberInstance(caller: BrowserTarget, instanceId: string): Promise<void> {
     await withRegistrationLock(() => {
         const store = readConnections();
+        if (isInstanceRevoked(store, instanceId)) throw new Error('CONNECTION_REMOVED');
         if (!store.connections.some(item => sameExtension(item, caller))) throw new Error('EXTENSION_NOT_REGISTERED');
         if (store.observed.some(item => sameExtension(item, caller) && item.instanceId === instanceId)) return;
         store.observed.push({ ...caller, instanceId });
@@ -117,17 +121,22 @@ export function saveRouterSettings(caller: BrowserTarget, instanceId: string, se
     });
 }
 
-export function ensureCanRemove(connection: Connection, revokesGrant: boolean): void {
-    const affected = listRunningHosts().filter(item => (!item.caller || sameExtension(connection, item.caller))
-        && (revokesGrant || item.instanceId === connection.instanceId));
-    if (affected.length) throw new Error('请先断开受影响的 MCP 实例 ' + affected.map(item => item.instanceId).join(', '));
+export function isInstanceRevoked(store: ConnectionStore, instanceId: string): boolean {
+    return store.revokedInstances?.includes(instanceId) === true;
+}
+
+export function revokeInstances(store: ConnectionStore, instanceIds: (string | null)[]): void {
+    const revoked = new Set(instanceIds.filter(validInstance));
+    if (!revoked.size) return;
+    store.revokedInstances = [...new Set([...(store.revokedInstances ?? []), ...revoked])];
+    store.observed = store.observed.filter(item => !revoked.has(item.instanceId));
 }
 
 export function listConnections(live = listRunningHosts(), uncertain: ReadonlySet<string> = new Set()) {
     const store = readConnections();
-    const unconfirmed = live.filter(host => !host.caller
+    const unconfirmed = live.filter(host => !isInstanceRevoked(store, host.instanceId) && (!host.caller
         || !store.connections.some(record => sameExtension(record, host.caller))
-        || !store.observed.some(item => item.instanceId === host.instanceId && sameExtension(item, host.caller)));
+        || !store.observed.some(item => item.instanceId === host.instanceId && sameExtension(item, host.caller))));
     const connections = store.connections.map(record => {
         const candidates = store.observed.filter(item => sameExtension(record, item)).map(item => {
             const found = live.some(active => active.instanceId === item.instanceId && sameExtension(record, active.caller));

@@ -40,12 +40,13 @@ export function listRunningHosts() {
     if (!fs.existsSync(directory)) return [];
     return fs.readdirSync(directory).filter(name => /^[a-f0-9]{64}\.json$/.test(name)).flatMap(name => {
         try {
-            const { instanceId, pid, caller } = JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')) as Discovery;
+            const { instanceId, pid, caller, session } = JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')) as Discovery;
+            if (!validInstance(instanceId) || name !== recordName(instanceId)) return [];
             if (!Number.isSafeInteger(pid) || pid <= 0) return [];
             try { process.kill(pid, 0); } catch (error) {
                 if ((error as NodeJS.ErrnoException).code !== 'EPERM') return [];
             }
-            return [{ instanceId, caller }];
+            return [{ instanceId, caller, session }];
         } catch { return []; }
     });
 }

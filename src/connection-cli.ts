@@ -92,7 +92,7 @@ export async function removeCommand(args: string[]): Promise<void> {
 export async function clearCommand(args: string[]): Promise<void> {
     const { values } = parseArgs({ args, options: { help: { type: 'boolean', short: 'h' } } });
     if (values.help) {
-        console.log('Usage: jtcrpa-mcp clear\n关闭所有浏览器中的 MCP 连接后，清空已登记的连接和授权。保留本机宿主安装。');
+        console.log('Usage: jtcrpa-mcp clear\n撤销所有登记和授权，断开在线会话，保留本机宿主安装。');
         return;
     }
     const count = await clearConnections();

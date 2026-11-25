@@ -9,7 +9,7 @@ const usage = [
     '  list [--json]',
     '  add (--chrome-id <扩展ID> | --firefox-id <扩展ID>) [--instance <UUID>]',
     '  remove [连接编号]',
-    '  clear        清空所有连接',
+    '  clear        撤销所有连接并断开在线会话',
     '客户端接入',
     '  connect (--chrome-id <扩展ID> | --firefox-id <扩展ID>) --instance <UUID> --setup <UUID>',
     '  config (--connection <连接编号> | --instance <UUID>) [--client codex|claude|deepseek]',

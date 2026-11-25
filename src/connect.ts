@@ -50,7 +50,7 @@ export async function connect(args: string[]) {
     }
     const directory = values['chrome-user-data-dir'];
     if (directory !== undefined) registration.push('--chrome-user-data-dir', directory);
-    await manageHostRegistration('add', registration, { fromRunningBrowser: true });
+    await manageHostRegistration('add', registration, { fromRunningBrowser: true, setupInstanceId: instanceId });
     console.error('正在等待发起接入的浏览器…');
     const setup = await bindBrowser(target, instanceId, ticket);
     console.log(JSON.stringify(setup.config, null, 2));
