@@ -28,6 +28,8 @@ macOS 上，Google Chrome 和 Microsoft Edge 都使用 `--chrome-id`。运行中
 
 保存后标签页保留。用户明确要求关闭具体页面时，AI 才调用 `page_close`，传回该页的 `tabId`、`pageRef`、新的 `requestId` 和 `userRequested: true`。页面跳转后从同一服务重新取得引用。
 
+运行带启动参数的工作流时，请配套更新扩展和桥接器。先调用 `workflow_get` 读取 `parameters`，再按参数名称和类型传给 `workflow_run.inputParams`，例如 `{"page_count":3}`。省略的参数使用工作流声明的默认值。校验失败时查看返回的 `parameterIssues`。
+
 编写接口采集工作流时，通过 `workflow_contract` 查询 `networkCatalog`、`networkSnapshot` 和 `probeNetwork` 是否可用，再用同一页的 `tabId` 和 `pageRef` 调用 `page_probe`。三者分别列出已捕获接口、查看结构和样例、预检取数和清洗。省略 `frameId` 或传 0。能力缺失时同时检查扩展和桥接器版本。
 
 示例文件是 `workflow_save` 的 **workflow 参数**。它包含可通过校验的完整步骤。要重现试采，取第一个节点的 `selectors` 和 `steps` 作为 `probeExtract` 的 `params`。标签页编号和页面引用由 `page_open` 或 `browser_context` 提供，写请求的 UUID 由客户端生成。[查看完整书店规则 JSON](examples/bookshop-workflow.json)
@@ -129,6 +131,8 @@ These are the calls behind the three chat messages in the README. Enter the prom
 | 5. Read the stored rows | Send `{"query":"bookshop_demo"}` to `dataset_list`. Check `datasetName`, `fields` and `rowsCount` in `datasets`. Call `dataset_read` with the exact `datasetName`, or pass the returned `id` as `datasetId`. | After the first run on an empty dataset, `total` is 4 and `rows` includes *Between Mountains and Seas* at ¥32.00. |
 
 Saving leaves the tab open. When the user explicitly asks to close a specific page, call `page_close` with its `tabId`, `pageRef`, a fresh `requestId` and `userRequested: true`. After navigation, refresh the page reference from the same service.
+
+Update the extension and bridge together to run workflows with startup parameters. Read `parameters` from `workflow_get`, then pass values by name and type in `workflow_run.inputParams`, for example `{"page_count":3}`. Omitted parameters use the workflow's declared defaults. Check `parameterIssues` if validation fails.
 
 For network extraction workflows, check `workflow_contract` for `networkCatalog`, `networkSnapshot`, and `probeNetwork`. Call them through `page_probe` with the same `tabId` and `pageRef`. They list captured endpoints, show response structure and samples, and preview extraction and cleaning. Omit `frameId` or set it to 0. Check both the extension and bridge versions if any probe is unavailable.
 

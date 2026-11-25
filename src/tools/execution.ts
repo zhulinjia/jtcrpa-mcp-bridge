@@ -8,6 +8,7 @@ export const executionTools: ForwardedToolDefinition[] = [
             '在明确的网页标签页中执行已保存的用户工作流，可能产生真实外部操作。' +
             '新建或修改流程保存后，必须先询问用户是否现在执行，等待本次保存之后的明确确认，不能因任务包含“采集”或保存成功就自动启动。' +
             '用户直接要求运行已有工作流时，可按该明确指令调用。' +
+            '需要传启动参数时，先读 workflow_get 的 parameters，按声明将本次值填到 inputParams。缺少无默认值的必填参数时询问用户。' +
             'requestId 必须为 UUID。返回原始 ok、runId、error；runId 只表示运行已建档，不代表已经完成，请通过 run_get 查询。' +
             '超时后先查询 connection_status(requestId) 和最近运行，不得自动更换请求编号再次启动。' +
             '即使返回 ok:false，只要带有 runId，也表示这次运行已有记录。',
@@ -15,7 +16,9 @@ export const executionTools: ForwardedToolDefinition[] = [
             requestId: z.uuid(),
             workflowId: z.number().int().positive(),
             ...pageTargetFields,
-        }),
+            inputParams: z.record(z.string(), z.json()).optional()
+                .describe('本次运行的参数值，按 workflow_get.parameters 的名称和类型填写。省略的字段使用工作流声明的默认值。'),
+        }).strict(),
         readOnly: false,
         openWorld: true,
     },

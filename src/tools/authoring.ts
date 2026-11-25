@@ -90,7 +90,8 @@ export const authoringTools: ForwardedToolDefinition[] = [
         name: 'workflow_get',
         description:
             '编辑前先读取已保存工作流的完整内容。保留无关节点和节点 ID，' +
-            '并将返回的工作流 ID 传入 workflow_save.workflow.workflowId。',
+            '并将返回的工作流 ID 传入 workflow_save.workflow.workflowId。' +
+            '需要按本次参数启动时，读取返回的 parameters，按声明填入 workflow_run.inputParams。',
         schema: z.object({
             workflowId: z.number().int().positive(),
         }),
