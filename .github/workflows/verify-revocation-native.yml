@@ -1,0 +1,32 @@
+name: Verify native session revocation
+
+on:
+  push:
+    branches: ['codex/verify-revocation-native']
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run check
+      - name: Require native revocation to pass on a genuine transport
+        shell: bash
+        run: |
+          npm test -- --test-reporter=tap | tee native-test.log
+          grep -E '^ok [0-9]+ - remove disconnects just the selected live profile and clear disconnects the remainder$' native-test.log
+          grep -E '^ok [0-9]+ - a removed instance cannot reconnect when another profile shares its extension ID$' native-test.log
