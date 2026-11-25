@@ -20,7 +20,7 @@
    jtcrpa-mcp --version
    ```
 
-   通用 MCP 入口使用桥接器 0.12.1 和配套扩展。开发测试可使用本仓库的 `npm pack` 安装包。
+   通用 MCP 入口使用桥接器 0.12.2 和配套扩展。开发测试可使用本仓库的 `npm pack` 安装包。
 
    接口目录、响应样例和接口试采需要桥接器 0.9.0+ 及配套扩展。[调用说明](docs/usage.md)
 
@@ -77,7 +77,7 @@
    jtcrpa-mcp --version
    ```
 
-   The unified MCP entry requires bridge 0.12.1 and its matching extension. For a development checkout, install the local package produced by `npm pack`.
+   The unified MCP entry requires bridge 0.12.2 and its matching extension. For a development checkout, install the local package produced by `npm pack`.
 
    Network discovery, response samples, network extraction previews, and previews of user-selected local files require bridge 0.9.0 or later and a matching extension. [Tool usage](docs/usage.md)
 

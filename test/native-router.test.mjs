@@ -70,14 +70,15 @@ test('router hands over after old native host releases, never replays a dispatch
 }, async t => {
     if (!await canListenLocally(t)) return;
     const { instanceId, grantId, target } = isolatedRoute(t);
-    const requestWaitingForHost = callExtension(target, 'connection_ping', { text: 'before dispatch' });
-    await delay(125);
     const old = startHost(t, instanceId, grantId);
+    // Wait for the initial host separately so Windows PowerShell cold startup
+    // does not consume the recovery window for a later session handoff.
     await old.next('connected');
+    const initialPing = callExtension(target, 'connection_ping', { text: 'old session' });
     const ping = await old.next('request');
     assert.equal(ping.routingGrant, grantId);
     old.reply(ping, ping.params.text);
-    assert.equal(await requestWaitingForHost, 'before dispatch');
+    assert.equal(await initialPing, 'old session');
 
     // Start the replacement during the upgrade while the old port is still live.
     const replacement = startHost(t, instanceId, grantId);
