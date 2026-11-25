@@ -89,7 +89,7 @@ function addNativeHost(paths: InstallationPaths, targets: BrowserTarget[], insta
     for (const target of targets) {
         addConnection(store, target, instanceId);
         const manifest = manifestPath(paths, target.kind);
-        files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, target, backup.files.get(manifest), 'add'), null, 2));
+        files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, { ...target, action: 'add' }, backup.files.get(manifest)), null, 2));
         if (!backup.registrations.get(target.kind)) register.set(target.kind, manifest);
     }
     files.set(connectionFile(), JSON.stringify(store));
@@ -122,9 +122,31 @@ export async function removeConnection(expected: Connection): Promise<void> {
                 throw new Error('本机宿主登记缺失，请重新运行 add。');
             }
             backup.files.set(manifest, fs.readFileSync(manifest));
-            files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, before, backup.files.get(manifest), 'remove'), null, 2));
+            files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, { ...before, action: 'remove' }, backup.files.get(manifest)), null, 2));
         }
         commitRegistration(paths, backup, files, new Map());
+    });
+}
+
+export function clearConnections(): Promise<number> {
+    return withRegistrationLock(() => {
+        if (listRunningHosts().length) throw new Error('请先关闭所有浏览器配置中的 MCP 连接，再运行 clear。');
+        const paths = installationPaths();
+        const store = readConnections();
+        const backup = captureInstallationBackup(paths, []);
+        const files = new Map<string, string>();
+        for (const kind of ['chrome', 'firefox'] as const) {
+            const manifest = manifestPath(paths, kind);
+            if (!fs.existsSync(manifest)) continue;
+            const contents = fs.readFileSync(manifest);
+            backup.files.set(manifest, contents);
+            files.set(manifest, JSON.stringify(createHostManifest(paths.launcher, { kind, action: 'clear' }, contents), null, 2));
+        }
+        if (backup.files.get(connectionFile())) {
+            files.set(connectionFile(), JSON.stringify({ nextId: store.nextId, connections: [], observed: [] }));
+        }
+        commitRegistration(paths, backup, files, new Map());
+        return store.connections.length;
     });
 }
 
@@ -277,11 +299,12 @@ function sharedInstallationFiles(paths: InstallationPaths, previous: Installatio
     return new Map([[paths.launcher, launcher], [paths.record, JSON.stringify(record)]]);
 }
 
-function createHostManifest(launcher: string, target: BrowserTarget, previous: Buffer | undefined, action: 'add' | 'remove') {
-    const { kind, extensionId } = target;
+type ManifestChange = (BrowserTarget & { action: 'add' | 'remove' }) | { kind: BrowserKind; action: 'clear' };
+
+function createHostManifest(launcher: string, change: ManifestChange, previous: Buffer | undefined) {
+    const { kind } = change;
     const chrome = kind === 'chrome';
     const field = chrome ? 'allowed_origins' : 'allowed_extensions';
-    const entry = chrome ? `chrome-extension://${extensionId}/` : extensionId;
     let allowed: string[] = [];
     if (previous) {
         const manifest = JSON.parse(previous.toString('utf8')) as Partial<Record<'name' | 'allowed_origins' | 'allowed_extensions', unknown>> | null;
@@ -292,12 +315,17 @@ function createHostManifest(launcher: string, target: BrowserTarget, previous: B
         }
         allowed = entries;
     }
+    if (change.action === 'clear') allowed = [];
+    else {
+        const entry = chrome ? `chrome-extension://${change.extensionId}/` : change.extensionId;
+        allowed = change.action === 'add' ? [...new Set([...allowed, entry])] : allowed.filter(item => item !== entry);
+    }
     return {
         name: HOST,
         description: 'Jiutouchong MCP bridge',
         path: launcher,
         type: 'stdio',
-        [field]: action === 'add' ? [...new Set([...allowed, entry])] : allowed.filter(item => item !== entry),
+        [field]: allowed,
     };
 }
 

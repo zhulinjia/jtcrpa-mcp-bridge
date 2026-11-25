@@ -9,6 +9,7 @@ const usage = [
     '  list [--json]',
     '  add (--chrome-id <扩展ID> | --firefox-id <扩展ID>) [--instance <UUID>]',
     '  remove [连接编号]',
+    '  clear        清空所有连接',
     '客户端接入',
     '  connect (--chrome-id <扩展ID> | --firefox-id <扩展ID>) --instance <UUID> --setup <UUID>',
     '  config (--connection <连接编号> | --instance <UUID>) [--client codex|claude|deepseek]',
@@ -41,6 +42,7 @@ try {
     }
     else if (command === 'list') await (await import('../dist/connection-cli.js')).listCommand(args);
     else if (command === 'remove') await (await import('../dist/connection-cli.js')).removeCommand(args);
+    else if (command === 'clear') await (await import('../dist/connection-cli.js')).clearCommand(args);
     else if (command === 'native-host') await (await import('../dist/native-host.js')).runNativeHost(args);
     else if (command === 'connect') await (await import('../dist/connect.js')).connect(args);
     else if (command === 'mcp') {

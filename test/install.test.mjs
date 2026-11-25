@@ -9,7 +9,8 @@ import { syncBuiltinESMExports } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { manageHostRegistration, removeConnection, clientConfig } from '../dist/install.js';
 import { connect } from '../dist/connect.js';
-import { listConnections, rememberInstance } from '../dist/connections.js';
+import { clearCommand } from '../dist/connection-cli.js';
+import { listConnections, rememberInstance, saveRouterSettings } from '../dist/connections.js';
 import { instanceFile, sessionEndpoint } from '../dist/paths.js';
 import { nativeCaller } from '../dist/browser-identity.js';
 import { randomUUID } from 'node:crypto';
@@ -457,6 +458,62 @@ test('remove restores the connection record if its last grant cannot be withdraw
         return rename(from, to);
     });
     await assert.rejects(removeConnection(listConnections().connections[0]), /manifest busy/);
+    assert.deepEqual(installedFiles(fixture), old);
+});
+
+test('clear removes every profile and grant while retaining the native host installation', async t => {
+    const fixture = isolatedInstallation(t);
+    const chromium = { kind: 'chrome', extensionId: chromeId };
+    const firefox = { kind: 'firefox', extensionId: firefoxId };
+    await manageHostRegistration('add', bothBrowsers);
+    for (const [caller, brand] of [[chromium, 'chrome'], [chromium, 'edge'], [firefox, 'firefox']]) {
+        const instance = randomUUID();
+        await rememberInstance(caller, instance);
+        await manageHostRegistration('add', ['--' + caller.kind + '-id', caller.extensionId, '--instance', instance]);
+        await saveRouterSettings(caller, instance, { grantId: randomUUID(), label: '', brand });
+    }
+    const before = fixture.read('connections.json');
+    const [launcher, installation] = installedFiles(fixture);
+    const registrations = [readHostRegistration('chrome'), readHostRegistration('firefox')];
+    const original = installedFiles(fixture);
+    await clearCommand(['--help']);
+    assert.match(fixture.messages.at(-1), /Usage: jtcrpa-mcp clear/);
+    await assert.rejects(clearCommand(['c1']));
+    assert.deepEqual(installedFiles(fixture), original);
+
+    await clearCommand([]);
+    assert.equal(fixture.messages.at(-1), '已清空 3 条连接。');
+    assert.deepEqual(fixture.read('connections.json'), { nextId: before.nextId, connections: [], observed: [] });
+    assert.deepEqual(fixture.read('chrome.json').allowed_origins, []);
+    assert.deepEqual(fixture.read('firefox.json').allowed_extensions, []);
+    assert.deepEqual(installedFiles(fixture).slice(0, 2), [launcher, installation]);
+    assert.deepEqual([readHostRegistration('chrome'), readHostRegistration('firefox')], registrations);
+    const cleared = installedFiles(fixture);
+    await clearCommand([]);
+    assert.deepEqual(installedFiles(fixture), cleared);
+    await manageHostRegistration('add', ['--chrome-id', chromeId]);
+    assert.equal(listConnections().connections[0].id, 'c' + before.nextId);
+    for (const { bindingId } of before.connections) {
+        await assert.rejects(callExtension({ bindingId }, 'connection_status'), /CONNECTION_REMOVED/);
+    }
+});
+
+test('clear preserves all registrations if a host is active or saving the cleared store fails', async t => {
+    const fixture = isolatedInstallation(t);
+    await manageHostRegistration('add', bothBrowsers);
+    const old = installedFiles(fixture);
+    const instanceId = randomUUID();
+    fs.writeFileSync(instanceFile(instanceId), JSON.stringify({ instanceId, pid: process.pid }));
+    await assert.rejects(clearCommand([]), /关闭所有浏览器配置中的 MCP/);
+    assert.deepEqual(installedFiles(fixture), old);
+    fs.unlinkSync(instanceFile(instanceId));
+
+    const rename = fs.renameSync;
+    t.mock.method(fs, 'renameSync', (from, to) => {
+        if (to === fixture.file('connections.json')) throw new Error('connections file busy');
+        return rename(from, to);
+    });
+    await assert.rejects(clearCommand([]), /connections file busy/);
     assert.deepEqual(installedFiles(fixture), old);
 });
 

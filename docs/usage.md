@@ -78,6 +78,8 @@ jtcrpa-mcp config --connection c1 --client claude
 
 可选客户端为 `codex`、`claude`、`deepseek`，省略 `--client` 会输出三种配置。生成的启动参数包含登记的绑定 UUID。更换已选实例或扩展时，先添加新连接、更新客户端配置，再运行 `jtcrpa-mcp remove` 选择旧登记并确认。脚本可用 `jtcrpa-mcp remove c1` 直接删除指定登记。删除后，即使显示编号被复用，旧配置也会返回 `CONNECTION_REMOVED`。
 
+要清空所有连接，先关闭各浏览器配置的 **MCP 连接**，再运行 `jtcrpa-mcp clear`。桥接器会清除已登记的连接和授权，同时保留本机宿主安装。需要恢复时，在目标浏览器的 MCP 页面重新接入。通用 MCP 配置可以继续使用，指定浏览器的旧配置需重新生成。
+
 ### 排查连接问题
 
 | 现象 | 处理 |
@@ -181,6 +183,8 @@ jtcrpa-mcp config --connection c1 --client claude
 ```
 
 The supported client identifiers are `codex`, `claude` and `deepseek`. Omit `--client` to print all three configurations. The generated startup arguments contain the registration’s binding UUID. To switch to a different extension ID or selected instance, add the new connection, update the client, then run `jtcrpa-mcp remove` to select and confirm the old registration. In scripts, `jtcrpa-mcp remove c1` removes the specified entry directly. The old client configuration returns `CONNECTION_REMOVED` even if its display number is later reused.
+
+To clear all connections, turn off **MCP connection** in every browser profile and run `jtcrpa-mcp clear`. This clears saved connections and authorizations while keeping the native host installed. Set up each intended profile again from its MCP page. The unified MCP configuration can be reused, while browser-specific configurations must be regenerated.
 
 ### Troubleshooting
 

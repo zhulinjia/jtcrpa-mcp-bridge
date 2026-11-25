@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
-import { removeConnection } from './install.ts';
+import { clearConnections, removeConnection } from './install.ts';
 import { listRunningHosts } from './paths.ts';
 import { callExtension } from './ipc.ts';
 import { getConnection, listConnections, readConnections, type Connection } from './connections.ts';
@@ -87,4 +87,14 @@ export async function removeCommand(args: string[]): Promise<void> {
     if (!selected) return;
     await removeConnection(selected);
     console.log('已删除 ' + selected.id);
+}
+
+export async function clearCommand(args: string[]): Promise<void> {
+    const { values } = parseArgs({ args, options: { help: { type: 'boolean', short: 'h' } } });
+    if (values.help) {
+        console.log('Usage: jtcrpa-mcp clear\n关闭所有浏览器中的 MCP 连接后，清空已登记的连接和授权。保留本机宿主安装。');
+        return;
+    }
+    const count = await clearConnections();
+    console.log(count ? `已清空 ${count} 条连接。` : '没有已登记的连接。');
 }
